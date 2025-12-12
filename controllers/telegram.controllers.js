@@ -7,7 +7,7 @@ const sendMessage = async (req, res) => {
 
     if(!update.message) return
 
-    const chatId = update.message.chatId
+    const chatId = update.message.chat.id
     const text = update.message.text
 
     await sendTextMessage(chatId, `${text} Was this the message you sent?`)
