@@ -1,7 +1,9 @@
 const { extractAll, containsHistory } = require("../extractor");
 const { handleLoginStart, handleVerifyOtp, isUserLoggedIn } = require("../services/login.service");
 const { saveEntry, getHistory, deleteEntriesByName, updateDebtBalance, clearDebtTracker, getAllDebts, deleteEntryById } = require("../services/udhaar.service");
+
 const { sendTextMessage } = require("../utils/telegramApi");
+const { translateToEnglish } = require("../utils/translate");
 
 const sendMessage = async (req, res) => {
     const update = req.body
@@ -11,7 +13,15 @@ const sendMessage = async (req, res) => {
     if (!update.message) return
 
     const chatId = update.message.chat.id
-    const text = update.message.text
+    let text = update.message.text
+
+    // Translate incoming text to English for better NLP
+    // We do this for everything except specific commands that we know are English-only (like /help, /summary)
+    // But even those won't hurt.
+    if (text) {
+        text = await translateToEnglish(text);
+        // console.log("Translated text:", text);
+    }
 
     // HELP
     if (/^\/help$/i.test(text) || /^help$/i.test(text)) {
@@ -21,7 +31,6 @@ const sendMessage = async (req, res) => {
             `🧹 *Clear Debt:* "Clear Ramesh"\n` +
             `📜 *History:* "Show history" or "History"\n` +
             `📊 *Summary:* "/summary" - View all net balances\n` +
-            `❌ *Delete:* "/delete <number>" - Delete a specific history entry\n` +
             `🔒 *Login:* "login" - Start secure session`;
         await sendTextMessage(chatId, helpMsg);
         return;
@@ -53,46 +62,8 @@ const sendMessage = async (req, res) => {
         return;
     }
 
-    // DELETE by Index (from History)
-    if (/^\/delete\s+(\d+)$/i.test(text)) {
-        if (!isUserLoggedIn(chatId)) {
-            await sendTextMessage(chatId, "🔒 Please login first.");
-            return;
-        }
+    // DELETE - REMOVED
 
-        const match = text.match(/^\/delete\s+(\d+)$/i);
-        const indexToDelete = parseInt(match[1]);
-
-        if (indexToDelete <= 0) {
-            await sendTextMessage(chatId, "❌ Invalid number. Use the number from 'History' command.");
-            return;
-        }
-
-        // Fetch history to find the ID
-        const history = await getHistory(chatId);
-        if (!history || history.length < indexToDelete) {
-            await sendTextMessage(chatId, `❌ Item #${indexToDelete} not found in history.`);
-            return;
-        }
-
-        // Arrays are 0-indexed, but list is 1-indexed
-        const item = history[indexToDelete - 1];
-
-        const success = await deleteEntryById(item.id);
-        if (success) {
-            // Also need to revert the ledger balance?
-            // This is tricky. If I delete a "Added 500" entry, I should subtract 500 from ledger.
-            // If I delete "Paid 200", I should add 200 to ledger.
-            // Let's do that for consistency.
-            const reverseAmount = -parseFloat(item.amount);
-            await updateDebtBalance(chatId, item.name, reverseAmount);
-
-            await sendTextMessage(chatId, `🗑️ Deleted entry #${indexToDelete}:\n*${item.name}* ₹${item.amount}\n(Ledger updated)`);
-        } else {
-            await sendTextMessage(chatId, "⚠️ Failed to delete item.");
-        }
-        return;
-    }
 
     // LOGIN
     if (/^login\s*$/i.test(text)) {
@@ -200,10 +171,15 @@ const sendMessage = async (req, res) => {
                     ? new Date(entry.created_at).toLocaleString()
                     : "Unknown time";
 
+                // Format Due Date
+                const dueDisplay = entry.due_date
+                    ? new Date(entry.due_date).toLocaleDateString("en-IN", { weekday: 'short', year: 'numeric', month: 'short', day: 'numeric' })
+                    : "No Due Date";
+
                 message += `${index + 1}. *${entry.name}*\n`;
                 message += `   💰 Amount: ₹${entry.amount}\n`;
                 message += `   📞 Phone: ${entry.phone}\n`;
-                message += `   ⏰ Due: ${entry.due_date}\n`;
+                message += `   ⏰ Due: ${dueDisplay}\n`;
                 message += `   🕒 Added: ${timestamp}\n\n`;
             });
 

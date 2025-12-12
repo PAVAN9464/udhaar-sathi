@@ -9,44 +9,44 @@ function generateOTP() {
 }
 
 const handleLoginStart = async (chatId) => {
-    const otp = generateOTP();
+  const otp = generateOTP();
 
-    // Store OTP with 1-min expiry
-    otpStore.set(chatId, {
-      otp,
-      expires: Date.now() + 1 * 60 * 1000 // 1 mins
-    });
+  // Store OTP with 1-min expiry
+  otpStore.set(chatId, {
+    otp,
+    expires: Date.now() + 1 * 60 * 1000 // 1 mins
+  });
 
-    // Send OTP directly to Telegram
-    await sendTextMessage(chatId, `✅ Your OTP is: ${otp}\nIt expires in 1 minutes. Please send: verify <otp>`);
+  // Send OTP directly to Telegram
+  await sendTextMessage(chatId, `✅ Your OTP is: ${otp}\nIt expires in 1 minutes. Please send: verify <otp>`);
 
-    return;
+  return;
 };
 
 const handleVerifyOtp = (chatId, userOtp) => {
-    const record = otpStore.get(chatId);
+  const record = otpStore.get(chatId);
 
-    if (!record) {
-        return `⚠️ No OTP requested. Please send: login`;
-    }
+  if (!record) {
+    return `⚠️ No OTP requested. Please send: login`;
+  }
 
-    if (Date.now() > record.expires) {
-        otpStore.delete(chatId);
-        return `⌛ OTP expired. Please request a new one by sending: login`;
-    }
-
-    if (record.otp !== userOtp) {
-        return `❌ Incorrect OTP. Please try again.`;
-    }
-
-    // OTP correct → create session
+  if (Date.now() > record.expires) {
     otpStore.delete(chatId);
-    sessionStore.set(chatId, {
-        loggedIn: true,
-        expiresAt: Date.now() + 1 * 60 * 1000 // 1 mins session
-    });
+    return `⌛ OTP expired. Please request a new one by sending: login`;
+  }
 
-    return `🎉 OTP verified! You are now logged in for 1 minutes.`;
+  if (record.otp !== userOtp) {
+    return `❌ Incorrect OTP. Please try again.`;
+  }
+
+  // OTP correct → create session
+  otpStore.delete(chatId);
+  sessionStore.set(chatId, {
+    loggedIn: true,
+    expiresAt: Date.now() + 5 * 60 * 1000 // 5 mins session
+  });
+
+  return `🎉 OTP verified! You are now logged in for 5 minutes.`;
 };
 
 const isUserLoggedIn = (chatId) => {
