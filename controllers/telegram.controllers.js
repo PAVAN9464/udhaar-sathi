@@ -136,7 +136,7 @@ const sendMessage = async (req, res) => {
 
     }
 
-    const { name, dueDate, amount, phone } = extractAll(text);
+    const { name, dueDate, amount, phone, intent } = extractAll(text);
 
     if (!name || !amount) {
         // Fallback if extraction failed?
@@ -145,19 +145,27 @@ const sendMessage = async (req, res) => {
         // Existing code didn't check. Assuming extraction works or we log empty.
     }
 
+    // Determine final amount based on intent
+    const finalAmount = (intent === 'DEBIT') ? -Math.abs(amount) : Math.abs(amount);
+    const isPayment = (intent === 'DEBIT');
+
     // 1. Log to History
-    await saveEntry({ chatId, name, amount, phone, dueDate })
+    await saveEntry({ chatId, name, amount: finalAmount, phone, dueDate })
 
     // 2. Update Ledger
-    const netBalance = await updateDebtBalance(chatId, name, amount, dueDate);
+    const netBalance = await updateDebtBalance(chatId, name, finalAmount, dueDate);
 
-    await sendTextMessage(chatId, `✅ *Debt Added Successfully!*
+    if (isPayment) {
+        await sendTextMessage(chatId, `📉 *Payment Recorded!*\n\nPaid ₹${Math.abs(amount)} for *${name}*.\nNet Balance: ₹${netBalance}`);
+    } else {
+        await sendTextMessage(chatId, `✅ *Debt Added Successfully!*
 
 👤 *Name:* ${name}
 💰 *Amount:* ₹${amount}
 📊 *Net Balance:* ₹${netBalance}
 📞 *Phone:* ${phone || 'N/A'}
 📅 *Due Date:* ${dueDate ? new Date(dueDate).toDateString() : 'N/A'}`)
+    }
 };
 
 module.exports = {

@@ -37,6 +37,7 @@ function extractAll(text) {
         amount: extractAmount(text),
         phone: extractPhone(text),
         dueDate: extractDueDate(text),
+        intent: extractIntent(text)
     };
 }
 
@@ -64,11 +65,26 @@ console.log("Amount:", extractAmount(text));
 console.log("Phone:", extractPhone(text));
 console.log("Due Date:", extractDueDate(text));
 
+// 6️⃣ Extract Intent — Credit (Add Debt) vs Debit (Payment)
+function extractIntent(text) {
+    const lowerText = text.toLowerCase();
+    const debitKeywords = ['paid', 'received', 'settled', 'got back', 'returned', 'gave'];
+
+    // Simple keyword match
+    for (const word of debitKeywords) {
+        if (lowerText.includes(word)) {
+            return 'DEBIT'; // Negative amount (Payment)
+        }
+    }
+    return 'CREDIT'; // Positive amount (Debt)
+}
+
 module.exports = {
     extractName,
     extractAmount,
     extractPhone,
     extractDueDate,
     extractAll,
-    containsHistory
+    containsHistory,
+    extractIntent
 };
