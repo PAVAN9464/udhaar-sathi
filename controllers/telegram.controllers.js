@@ -29,7 +29,7 @@ const sendMessage = async (req, res) => {
                 message += `${index + 1}. *${entry.name}*\n`;
                 message += `   💰 Amount: ₹${entry.amount}\n`;
                 message += `   📞 Phone: ${entry.phone}\n`;
-                message += `   ⏰ Due: ${entry.dueDate}\n`;
+                message += `   ⏰ Due: ${entry.due_date}\n`;
                 message += `   🕒 Added: ${timestamp}\n\n`;
             });
 
