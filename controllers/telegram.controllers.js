@@ -25,21 +25,27 @@ const sendMessage = async (req, res) => {
 
         // VOICE PROCESSING
         if (voice) {
+            console.log("🎤 Voice message detected! File ID:", voice.file_id);
             try {
                 const fileId = voice.file_id;
                 const fileUrl = await getFileLink(fileId);
+                console.log("🔗 File Link:", fileUrl);
 
                 if (fileUrl) {
                     const tempFilePath = path.join(__dirname, `../temp_audio_${fileId}.ogg`);
+                    console.log("📂 Downloading to:", tempFilePath);
 
                     await sendTextMessage(chatId, "🎤 Processing voice note...");
 
                     // Download
                     const downloaded = await downloadFile(fileUrl, tempFilePath);
+                    console.log("📥 Download status:", downloaded);
 
                     if (downloaded) {
                         // Transcribe
+                        console.log("🧠 Sending to Groq...");
                         text = await transcribeAudio(tempFilePath);
+                        console.log("📝 Transcription result:", text);
 
                         // Clean up
                         fs.unlink(tempFilePath, (err) => { if (err) console.error("Temp file delete error", err); });
@@ -52,9 +58,12 @@ const sendMessage = async (req, res) => {
                             return;
                         }
                     } else {
+                        console.error("❌ Failed to download file from Telegram.");
                         await sendTextMessage(chatId, "⚠️ Failed to download voice message.");
                         return;
                     }
+                } else {
+                    console.error("❌ Could not get File URL from Telegram.");
                 }
             } catch (err) {
                 console.error("Voice processing error:", err);
