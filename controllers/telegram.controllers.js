@@ -14,6 +14,7 @@ const sendMessage = async (req, res) => {
     const text = update.message.text
 
     if (/^login (.+)/.test(text)) {
+        console.log(text)
         if (/^login\s*$/i.test(text)) {
             // User typed just 'login' with optional spaces
             await sendTextMessage(chatId, "❌ Please provide your email.\nExample: login your@email.com");
