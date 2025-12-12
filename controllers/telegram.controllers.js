@@ -2,8 +2,11 @@ const { extractAll, containsHistory } = require("../extractor");
 const { handleLoginStart, handleVerifyOtp, isUserLoggedIn } = require("../services/login.service");
 const { saveEntry, getHistory, deleteEntriesByName, updateDebtBalance, clearDebtTracker, getAllDebts, deleteEntryById, deleteAllHistory } = require("../services/udhaar.service");
 
-const { sendTextMessage } = require("../utils/telegramApi");
+const { sendTextMessage, getFileLink, downloadFile } = require("../utils/telegramApi");
 const { translateToEnglish } = require("../utils/translate");
+const { transcribeAudio } = require("../utils/groq");
+const fs = require("fs");
+const path = require("path");
 
 const sendMessage = async (req, res) => {
     try {
@@ -18,6 +21,47 @@ const sendMessage = async (req, res) => {
 
         const chatId = update.message.chat.id;
         let text = update.message.text;
+        let voice = update.message.voice || update.message.audio;
+
+        // VOICE PROCESSING
+        if (voice) {
+            try {
+                const fileId = voice.file_id;
+                const fileUrl = await getFileLink(fileId);
+
+                if (fileUrl) {
+                    const tempFilePath = path.join(__dirname, `../temp_audio_${fileId}.ogg`);
+
+                    await sendTextMessage(chatId, "🎤 Processing voice note...");
+
+                    // Download
+                    const downloaded = await downloadFile(fileUrl, tempFilePath);
+
+                    if (downloaded) {
+                        // Transcribe
+                        text = await transcribeAudio(tempFilePath);
+
+                        // Clean up
+                        fs.unlink(tempFilePath, (err) => { if (err) console.error("Temp file delete error", err); });
+
+                        if (text) {
+                            await sendTextMessage(chatId, `🗣️ *Heard:* "${text}"`);
+                            // Fall out of if(voice) block and let normal text processing handle 'text'
+                        } else {
+                            await sendTextMessage(chatId, "⚠️ Could not transcribe audio. Please try again.");
+                            return;
+                        }
+                    } else {
+                        await sendTextMessage(chatId, "⚠️ Failed to download voice message.");
+                        return;
+                    }
+                }
+            } catch (err) {
+                console.error("Voice processing error:", err);
+                await sendTextMessage(chatId, "⚠️ Error processing voice.");
+                return;
+            }
+        }
 
         // Translate incoming text to English for better NLP
         if (text && typeof text === 'string') {

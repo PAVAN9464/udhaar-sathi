@@ -39,4 +39,34 @@ async function sendMessageChunk(chatId, text) {
   }
 }
 
-module.exports = { sendTextMessage };
+async function getFileLink(fileId) {
+  try {
+    const response = await fetch(`${TELEGRAM_API}/getFile?file_id=${fileId}`);
+    const data = await response.json();
+    if (data.ok) {
+      return `https://api.telegram.org/file/bot${TOKEN}/${data.result.file_path}`;
+    }
+    return null;
+  } catch (error) {
+    console.error("Error getting file link:", error);
+    return null;
+  }
+}
+
+async function downloadFile(url, destPath) {
+  const fs = require('fs');
+  const { pipeline } = require('stream/promises');
+
+  try {
+    const response = await fetch(url);
+    if (!response.ok) throw new Error(`unexpected response ${response.statusText}`);
+
+    await pipeline(response.body, fs.createWriteStream(destPath));
+    return true;
+  } catch (error) {
+    console.error("Error downloading file:", error);
+    return false;
+  }
+}
+
+module.exports = { sendTextMessage, getFileLink, downloadFile };
