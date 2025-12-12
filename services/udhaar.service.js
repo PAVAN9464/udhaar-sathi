@@ -140,4 +140,28 @@ async function clearDebtTracker(chatId, name) {
     return !error;
 }
 
-module.exports = { saveEntry, getHistory, deleteEntriesByName, updateDebtBalance, getDebtBalance, clearDebtTracker };
+
+async function getAllDebts(chatId) {
+    const { data, error } = await supabase
+        .from('debt_track')
+        .select('*')
+        .eq('chatId', chatId)
+        .order('name', { ascending: true }); // Alphabetical order
+
+    if (error) {
+        console.error("Error fetching all debts:", error);
+        return [];
+    }
+    return data;
+}
+
+async function deleteEntryById(id) {
+    const { error } = await supabase
+        .from('history')
+        .delete()
+        .eq('id', id);
+
+    return !error;
+}
+
+module.exports = { saveEntry, getHistory, deleteEntriesByName, updateDebtBalance, getDebtBalance, clearDebtTracker, getAllDebts, deleteEntryById };

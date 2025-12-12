@@ -3,20 +3,42 @@ const nlp = require("compromise");
 const natural = require('natural');
 const tokenizer = new natural.WordTokenizer();
 
-// 1️⃣ Extract Name — using SUBJECT of the sentence (no plugins)
+// 1️⃣ Extract Name — using Person tag, fallback to Noun
 function extractName(text) {
     const doc = nlp(text);
 
-    const subjects = doc.match('#Noun').out('array')
+    // First try to find a Person (capitalized names usually)
+    let subjects = doc.people().out('array');
 
-    return subjects[0];
+    if (subjects.length === 0) {
+        // Fallback to Nouns but exclude common non-name nouns if possible
+        // For now, just take the first Noun that isn't a date/number
+        subjects = doc.match('#Noun').not('#Date').not('#Value').out('array');
+    }
+
+    // Filter out "rupees", "rs", "history", "login" if they strictly match
+    const invalidNames = ['rupees', 'rs', 'history', 'login', 'clear', 'paid', 'verify', 'summary', 'help', 'delete'];
+    const filtered = subjects.filter(s => !invalidNames.includes(s.toLowerCase()));
+
+    return filtered.length > 0 ? filtered[0] : null;
 }
 
-// 2️⃣ Extract Amount — number BEFORE rs / rupees / ₹
+// 2️⃣ Extract Amount — number BEFORE/AFTER rs / rupees / ₹, or just a standalone number if context implies
 function extractAmount(text) {
-    const regex = /\b([0-9]+(?:\.[0-9]+)?)\s*(?=rs\.?|rupees|₹)/i;
-    const match = text.match(regex);
-    return match ? parseFloat(match[1]) : null;
+    // 1. Explicit currency: "500rs", "rs 500", "₹500"
+    const explicitRegex = /(?:rs\.?|rupees|₹)\s*(\d+(?:\.\d+)?)|(\d+(?:\.\d+)?)\s*(?:rs\.?|rupees|₹)/i;
+    const match = text.match(explicitRegex);
+
+    if (match) {
+        return parseFloat(match[1] || match[2]);
+    }
+
+    // 2. Implicit if keywords like "pay", "owe", "gave" exist? 
+    // Risky, but if we found a number and it's the only number...
+    // Let's stick to explicit for now to avoid catching "2 days".
+    // Or check if there is a number that is NOT part of a phone / date.
+
+    return null;
 }
 
 // 3️⃣ Extract Phone — strict 10 digits (Indian pattern)
