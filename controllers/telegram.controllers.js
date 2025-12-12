@@ -280,7 +280,7 @@ const sendMessage = async (req, res) => {
 
         }
 
-        const { name, dueDate, amount, phone, intent } = extractAll(text);
+        const { name, dueDate, amount, phone: extractedPhone, intent } = extractAll(text);
 
         if (!name || amount === null) {
             // Only send this if it doesn't match other commands and looks like a transaction attempt
@@ -293,12 +293,12 @@ const sendMessage = async (req, res) => {
         const isPayment = (intent === 'DEBIT');
 
         // 1. Log to History
-        await saveEntry({ chatId, name, amount: finalAmount, phone, dueDate })
+        await saveEntry({ chatId, name, amount: finalAmount, phone: extractedPhone, dueDate })
 
         // 2. Update Ledger
         // extractAll returns phone if found in text, else null.
         // We pass 'phone' (extracted from text) so it can be stored in debt_track.
-        const netBalance = await updateDebtBalance(chatId, name, finalAmount, dueDate, phone, firstName);
+        const netBalance = await updateDebtBalance(chatId, name, finalAmount, dueDate, extractedPhone, firstName);
 
         if (isPayment) {
             await sendTextMessage(chatId, `📉 *Payment Recorded!*\n\nPaid ₹${Math.abs(amount)} for *${name}*.\nNet Balance: ₹${netBalance}`);
@@ -309,7 +309,7 @@ const sendMessage = async (req, res) => {
     👤 *Name:* ${name}
     💰 *Amount:* ₹${amount}
     📊 *Net Balance:* ₹${netBalance}
-    📞 *Phone:* ${phone || 'N/A'}
+    📞 *Phone:* ${extractedPhone || 'N/A'}
     📅 *Due Date:* ${formattedDate}`)
         }
     } catch (err) {
