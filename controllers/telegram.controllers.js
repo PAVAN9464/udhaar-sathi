@@ -1,6 +1,6 @@
 const { extractAll, containsHistory } = require("../extractor");
 const { handleLoginStart, handleVerifyOtp, isUserLoggedIn } = require("../services/login.service");
-const { saveEntry, getHistory, deleteEntriesByName, updateDebtBalance, clearDebtTracker, getAllDebts, deleteEntryById } = require("../services/udhaar.service");
+const { saveEntry, getHistory, deleteEntriesByName, updateDebtBalance, clearDebtTracker, getAllDebts, deleteEntryById, deleteAllHistory } = require("../services/udhaar.service");
 
 const { sendTextMessage } = require("../utils/telegramApi");
 const { translateToEnglish } = require("../utils/translate");
@@ -8,12 +8,12 @@ const { translateToEnglish } = require("../utils/translate");
 const sendMessage = async (req, res) => {
     try {
         const update = req.body;
-        
+
         // Always return 200 OK to Telegram to prevent retries
         res.sendStatus(200);
 
         if (!update || !update.message || !update.message.chat || !update.message.text) {
-             return;
+            return;
         }
 
         const chatId = update.message.chat.id;
@@ -38,8 +38,26 @@ const sendMessage = async (req, res) => {
                 `🧹 *Clear Debt:* "Clear Ramesh"\n` +
                 `📜 *History:* "Show history" or "History"\n` +
                 `📊 *Summary:* "/summary" - View all net balances\n` +
-                `🔒 *Login:* "login" - Start secure session`;
+                `�️ *Reset:* "Reset Bot" - Delete ALL data\n` +
+                `�🔒 *Login:* "login" - Start secure session`;
             await sendTextMessage(chatId, helpMsg);
+            return;
+        }
+
+        // RESET / CLEAR ALL
+        if (/^reset bot$/i.test(text) || /^clear all history$/i.test(text)) {
+            if (!isUserLoggedIn(chatId)) {
+                await sendTextMessage(chatId, "🔒 Please login first to reset data. Send: login");
+                return;
+            }
+
+            // Optional: Ask for confirmation? For now, direct action as it's a specific command.
+            const success = await deleteAllHistory(chatId);
+            if (success) {
+                await sendTextMessage(chatId, "🗑️ *All wiped!* Your history and ledger have been reset.");
+            } else {
+                await sendTextMessage(chatId, "⚠️ Error resetting data. Please try again.");
+            }
             return;
         }
 
@@ -64,7 +82,7 @@ const sendMessage = async (req, res) => {
                     msg += `👤 *${d.name}:* ₹${val.toFixed(2)}\n`;
                 }
             });
-            
+
             await sendTextMessage(chatId, msg);
             return;
         }
@@ -164,7 +182,7 @@ const sendMessage = async (req, res) => {
 
                 historyArray.forEach((entry, index) => {
                     if (!entry) return;
-                    
+
                     const timestamp = entry.created_at
                         ? new Date(entry.created_at).toLocaleString()
                         : "Unknown time";
@@ -173,7 +191,7 @@ const sendMessage = async (req, res) => {
                     let dueDisplay = "No Due Date";
                     try {
                         if (entry.due_date) {
-                             dueDisplay = new Date(entry.due_date).toLocaleDateString("en-IN", { weekday: 'short', year: 'numeric', month: 'short', day: 'numeric' });
+                            dueDisplay = new Date(entry.due_date).toLocaleDateString("en-IN", { weekday: 'short', year: 'numeric', month: 'short', day: 'numeric' });
                         }
                     } catch (e) {
                         dueDisplay = "Invalid Date";

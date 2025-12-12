@@ -175,4 +175,26 @@ async function deleteEntryById(id) {
     return !error;
 }
 
-module.exports = { saveEntry, getHistory, deleteEntriesByName, updateDebtBalance, getDebtBalance, clearDebtTracker, getAllDebts, deleteEntryById };
+async function deleteAllHistory(chatId) {
+    if (!chatId) return false;
+
+    // Delete from history
+    const { error: historyError } = await supabase
+        .from('history')
+        .delete()
+        .eq('chatId', chatId);
+
+    // Delete from ledger
+    const { error: debtError } = await supabase
+        .from('debt_track')
+        .delete()
+        .eq('chatId', chatId);
+
+    if (historyError || debtError) {
+        console.error("Error clearing history:", historyError, debtError);
+        return false;
+    }
+    return true;
+}
+
+module.exports = { saveEntry, getHistory, deleteEntriesByName, updateDebtBalance, getDebtBalance, clearDebtTracker, getAllDebts, deleteEntryById, deleteAllHistory };
