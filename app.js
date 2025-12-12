@@ -1,10 +1,10 @@
 const express = require("express");
-const whatsappRoutes = require('./routes/whatsapp.routes');
+const telegramRoutes = require('./routes/telegram.routes');
 const app = express();
 
 app.use(express.json());
 
-app.use('/whatsapp', whatsappRoutes)
+app.use('/telegram', telegramRoutes)
 
 app.get("/health", (req, res) => {
   res.status(200).json({
