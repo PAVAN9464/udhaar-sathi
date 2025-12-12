@@ -5,6 +5,7 @@ const tokenizer = new natural.WordTokenizer();
 
 // 1️⃣ Extract Name — using Person tag, fallback to Noun
 function extractName(text) {
+    if (!text || typeof text !== 'string') return null;
     const doc = nlp(text);
 
     // First try to find a Person (capitalized names usually)
@@ -25,6 +26,7 @@ function extractName(text) {
 
 // 2️⃣ Extract Amount — number BEFORE/AFTER rs / rupees / ₹, or just a standalone number if context implies
 function extractAmount(text) {
+    if (!text || typeof text !== 'string') return null;
     // 1. Explicit currency: "500rs", "rs 500", "₹500"
     const explicitRegex = /(?:rs\.?|rupees|₹)\s*(\d+(?:\.\d+)?)|(\d+(?:\.\d+)?)\s*(?:rs\.?|rupees|₹)/i;
     const match = text.match(explicitRegex);
@@ -43,17 +45,20 @@ function extractAmount(text) {
 
 // 3️⃣ Extract Phone — strict 10 digits (Indian pattern)
 function extractPhone(text) {
+    if (!text) return null;
     const match = text.match(/\b[6-9][0-9]{9}\b/);
     return match ? match[0] : null;
 }
 
 // 4️⃣ Extract Due Date — chrono
 function extractDueDate(text) {
+    if (!text) return null;
     return chrono.parseDate(text) || null;
 }
 
 // 5️⃣ Combined Extractor
 function extractAll(text) {
+    if (!text) return { name: null, amount: null, phone: null, dueDate: null, intent: null };
     return {
         name: extractName(text),
         amount: extractAmount(text),
@@ -64,7 +69,7 @@ function extractAll(text) {
 }
 
 function containsHistory(sentence) {
-    if (!sentence) return false;
+    if (!sentence || typeof sentence !== 'string') return false;
 
     const words = tokenizer.tokenize(sentence.toLowerCase());
     const target = 'history';
@@ -89,6 +94,7 @@ console.log("Due Date:", extractDueDate(text));
 
 // 6️⃣ Extract Intent — Credit (Add Debt) vs Debit (Payment)
 function extractIntent(text) {
+    if (!text) return 'CREDIT';
     const lowerText = text.toLowerCase();
     const debitKeywords = ['paid', 'received', 'settled', 'got back', 'returned', 'gave'];
 

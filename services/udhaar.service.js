@@ -1,14 +1,15 @@
 const supabase = require("../config/supabase");
 
 async function saveEntry({ chatId, name, amount, phone, dueDate }) {
+    if (!chatId) return null; // Safe guard
     const { error } = await supabase
         .from("history")
         .insert([
             {
                 chatId,
-                name,
-                amount,
-                phone,
+                name: name || 'Unknown',
+                amount: amount || 0,
+                phone: phone || null,
                 due_date: dueDate, // JS Date object → timestamp in DB
             }
         ])
@@ -64,21 +65,30 @@ async function deleteEntriesByName(chatId, name) {
 
 // Ledger Logic
 async function getDebtBalance(chatId, name) {
-    const { data, error } = await supabase
-        .from('debt_track')
-        .select('*')
-        .eq('chatId', chatId) // Quoted identifier in DB, usually maps to normal JS prop
-        .ilike('name', name)
-        .maybeSingle();
+    if (!chatId || !name) return null;
 
-    if (error) {
-        console.error("Error fetching balance:", error);
-        return null; // Treat as 0 or null
+    try {
+        const { data, error } = await supabase
+            .from('debt_track')
+            .select('*')
+            .eq('chatId', chatId) // Quoted identifier in DB, usually maps to normal JS prop
+            .ilike('name', name)
+            .maybeSingle();
+
+        if (error) {
+            console.error("Error fetching balance:", error);
+            return null; // Treat as 0 or null
+        }
+        return data;
+    } catch (err) {
+        console.error("Exception in getDebtBalance:", err);
+        return null;
     }
-    return data;
 }
 
 async function updateDebtBalance(chatId, name, amountChange, dueDate = null) {
+    if (!chatId || !name) return 0;
+
     // 1. Get current record
     const currentRecord = await getDebtBalance(chatId, name);
 
@@ -87,7 +97,8 @@ async function updateDebtBalance(chatId, name, amountChange, dueDate = null) {
 
     // Conversions: Database 'amount' is TEXT, so we parse float
     if (currentRecord) {
-        newAmount = (parseFloat(currentRecord.amount) || 0) + parseFloat(amountChange);
+        const currentVal = parseFloat(currentRecord.amount);
+        newAmount = (isNaN(currentVal) ? 0 : currentVal) + parseFloat(amountChange);
         if (!finalDueDate) finalDueDate = currentRecord.dueDate;
     }
 
