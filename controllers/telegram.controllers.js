@@ -97,12 +97,12 @@ const sendMessage = async (req, res) => {
 
     await saveEntry({ chatId, name, amount, phone, dueDate })
 
-    await sendTextMessage(chatId, `
-        name: ${name},
-        due date: ${dueDate},
-        amount: ${amount},
-        phone: ${phone}    
-    `)
+    await sendTextMessage(chatId, `✅ *Debt Added Successfully!*
+
+👤 *Name:* ${name}
+💰 *Amount:* ₹${amount}
+📞 *Phone:* ${phone || 'N/A'}
+📅 *Due Date:* ${dueDate ? new Date(dueDate).toDateString() : 'N/A'}`)
 };
 
 module.exports = {
