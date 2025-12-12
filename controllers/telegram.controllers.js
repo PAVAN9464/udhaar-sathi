@@ -1,6 +1,6 @@
 const { extractAll, containsHistory } = require("../extractor");
 const { handleLoginStart, handleVerifyOtp, isUserLoggedIn } = require("../services/login.service");
-const { saveEntry, getHistory } = require("../services/udhaar.service");
+const { saveEntry, getHistory, deleteEntriesByName } = require("../services/udhaar.service");
 const { sendTextMessage } = require("../utils/telegramApi");
 
 const sendMessage = async (req, res) => {
@@ -8,14 +8,14 @@ const sendMessage = async (req, res) => {
 
     res.sendStatus(200)
 
-    if(!update.message) return
+    if (!update.message) return
 
     const chatId = update.message.chat.id
     const text = update.message.text
 
     // LOGIN
     if (/^login\s*$/i.test(text)) {
-    // Check if already logged in
+        // Check if already logged in
         if (isUserLoggedIn(chatId)) {
             await sendTextMessage(chatId, "✔️ You are already logged in.");
             return;
@@ -23,8 +23,8 @@ const sendMessage = async (req, res) => {
 
         // Trigger OTP flow
         await handleLoginStart(chatId);
-    return;
-}
+        return;
+    }
 
 
     if (/^verify\s+(.+)/i.test(text)) {
@@ -41,9 +41,29 @@ const sendMessage = async (req, res) => {
         await sendTextMessage(chatId, reply);
         return;
     }
-    
+
+    // CLEAR / SETTLE
+    if (/^(clear|paid)\s+(.+)/i.test(text)) {
+        if (!isUserLoggedIn(chatId)) {
+            await sendTextMessage(chatId, "🔒 Please login first to clear debts. Send: login");
+            return;
+        }
+
+        const match = text.match(/^(?:clear|paid)\s+(.+)/i);
+        const nameToClear = match[1].trim();
+
+        const count = await deleteEntriesByName(chatId, nameToClear);
+
+        if (count > 0) {
+            await sendTextMessage(chatId, `✅ Successfully cleared ${count} entries for "${nameToClear}".`);
+        } else {
+            await sendTextMessage(chatId, `⚠️ No entries found for "${nameToClear}" to clear.`);
+        }
+        return;
+    }
+
     if (containsHistory(text)) {
-        const historyArray = await getHistory(chatId) 
+        const historyArray = await getHistory(chatId)
         function formatHistoryForTelegram() {
             if (!historyArray || historyArray.length === 0) {
                 return "No history found for this chat.";
@@ -73,9 +93,9 @@ const sendMessage = async (req, res) => {
 
     }
 
-    const {name, dueDate, amount, phone} = extractAll(text);
+    const { name, dueDate, amount, phone } = extractAll(text);
 
-    await saveEntry({chatId, name, amount, phone, dueDate})
+    await saveEntry({ chatId, name, amount, phone, dueDate })
 
     await sendTextMessage(chatId, `
         name: ${name},

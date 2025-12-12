@@ -37,6 +37,26 @@ async function getHistory(chatId) {
         console.error('Unexpected error:', err);
         return [];
     }
+async function deleteEntriesByName(chatId, name) {
+    if (!chatId || !name) return 0;
+
+    // First find how many we are deleting (optional, for better UX)
+    // or just delete directly. Let's delete directly and return count if possible.
+    // Supabase delete returns data.
+
+    const { data, error } = await supabase
+        .from('history')
+        .delete()
+        .eq('chatId', chatId)
+        .ilike('name', name) // case-insensitive match
+        .select();
+
+    if (error) {
+        console.error("Error deleting from DB:", error);
+        return 0;
+    }
+
+    return data ? data.length : 0;
 }
 
-module.exports = { saveEntry, getHistory };
+module.exports = { saveEntry, getHistory, deleteEntriesByName };
