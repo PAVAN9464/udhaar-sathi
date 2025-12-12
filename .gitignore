@@ -1,0 +1,52 @@
+# Node modules
+node_modules/
+
+# Logs
+logs/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Runtime data
+pids/
+*.pid
+*.seed
+*.pid.lock
+
+# Environment variables
+.env
+.env.local
+.env.*.local
+
+# VS Code
+.vscode/
+.history/
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# WSL / Linux temp files
+*.swp
+*.swo
+*.swn
+*.bak
+
+# Supabase
+supabase/.cache/
+supabase/migrations/*.lock
+
+# Optional: coverage reports
+coverage/
+
+# Optional: local database files
+*.sqlite
+*.db
+
+# Optional: debug folders
+.debug/
+
+# Optional: dist/build folders
+dist/
+build/
