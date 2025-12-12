@@ -15,11 +15,15 @@ const sendMessage = async (req, res) => {
         // Always return 200 OK to Telegram to prevent retries
         res.sendStatus(200);
 
-        if (!update || !update.message || !update.message.chat || !update.message.text) {
+        if (!update || !update.message || !update.message.chat) {
             return;
         }
 
+        console.log("received update:", JSON.stringify(update, null, 2));
+
         const chatId = update.message.chat.id;
+
+
         let text = update.message.text;
         let voice = update.message.voice || update.message.audio;
 
