@@ -90,7 +90,7 @@ const sendMessage = async (req, res) => {
             // Let's log '0' with name "CLEARED: Name"? Or just delete from ledger.
             // "History table just logs the prompt." -> So maybe we should just save the text entry?
             // Let's stick to consistent logging.
-            await saveEntry({ chatId, name: nameToClear, amount: 0, phone: 'CLEARED', dueDate: null });
+            await saveEntry({ chatId, name: `CLEARED: ${nameToClear}`, amount: 0, phone: null, dueDate: null });
 
             // 2. Clear from Ledger
             // const count = await deleteEntriesByName(chatId, nameToClear); // OLD

@@ -67,7 +67,7 @@ async function getDebtBalance(chatId, name) {
     const { data, error } = await supabase
         .from('debt_track')
         .select('*')
-        .eq('chatId', chatId)
+        .eq('chatId', chatId) // Quoted identifier in DB, usually maps to normal JS prop
         .ilike('name', name)
         .maybeSingle();
 
@@ -85,52 +85,46 @@ async function updateDebtBalance(chatId, name, amountChange, dueDate = null) {
     let newAmount = amountChange;
     let finalDueDate = dueDate; // Default to new due date if provided
 
+    // Conversions: Database 'amount' is TEXT, so we parse float
     if (currentRecord) {
         newAmount = (parseFloat(currentRecord.amount) || 0) + parseFloat(amountChange);
-        // Keep old due date if new one is not provided, or update it?
-        // Let's update if provided.
         if (!finalDueDate) finalDueDate = currentRecord.dueDate;
     }
 
-    // 2. Upsert (Insert or Update)
-    // We can use upsert if we have a unique constraint on (chatId, name).
-    // Assuming (chatId, name) is unique or we handle it by ID if we had one.
-    // For now, let's just delete and insert, or use upsert if configured.
-    // Safest logic without schema knowledge: Check calculated amount.
-
-    // If new amount is 0, should we remove it? Maybe. 
-    // Let's keep it unless explicitly cleared.
-
+    // Convert back to string if column is text, though drivers usually handle it.
+    // Let's be explicit.
     const upsertData = {
-        chatId,
-        name, // strict name? or normalized?
-        amount: newAmount,
+        chatId: chatId,
+        name: name,
+        amount: String(newAmount), // Store as text per schema
         dueDate: finalDueDate
     };
 
-    // If record exists, we need matches to update.
-    // If we rely on name, we should be consistent.
-    // Let's try upsert on 'id' if we had it, but we don't.
-    // We will do a delete (if exists) and insert to be sure, or better:
+    // Manual Upsert Logic because constraints/indexes might be tricky
+    let error;
+    let data;
 
-    // Supabase upsert requires primary key or unique constraint.
-    // Let's assume (chatId, name) is unique.
-
-    const { data, error } = await supabase
-        .from('debt_track')
-        .upsert(upsertData, { onConflict: 'chatId, name' })
-        .select();
+    if (currentRecord && currentRecord.id) {
+        // Update existing
+        const res = await supabase
+            .from('debt_track')
+            .update({ amount: String(newAmount), dueDate: finalDueDate })
+            .eq('id', currentRecord.id)
+            .select();
+        error = res.error;
+        data = res.data;
+    } else {
+        // Insert new
+        const res = await supabase
+            .from('debt_track')
+            .insert(upsertData)
+            .select();
+        error = res.error;
+        data = res.data;
+    }
 
     if (error) {
-        // Fallback if unique constraint fails or doesn't exist:
-        // Update if exists, Insert if not.
-        console.warn("Upsert failed, trying manual update/insert", error.message);
-
-        if (currentRecord) {
-            await supabase.from('debt_track').update({ amount: newAmount, dueDate: finalDueDate }).eq('id', currentRecord.id);
-        } else {
-            await supabase.from('debt_track').insert(upsertData);
-        }
+        console.error("Error updating debt_track:", error);
     }
 
     return newAmount;
