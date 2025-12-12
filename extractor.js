@@ -1,34 +1,38 @@
 const chrono = require("chrono-node");
 const nlp = require("compromise");
 
-
-// 1️⃣ Extract Name → Using ONLY compromise, NO regex cleaning
+// 1️⃣ Extract Name using compromise dependency parse
 function extractName(text) {
     const doc = nlp(text);
+    const parsed = doc.parse();
 
-    // Prefer the grammatical subject
-    const subject = doc.sentences().subjects().out('text');
-    if (subject) return subject.trim();
+    try {
+        const sentences = parsed.sentences();
+        if (sentences.length > 0) {
+            const subjects = sentences[0].subjects();
+            if (subjects.length > 0) {
+                return subjects[0].text().trim();
+            }
+        }
+    } catch (err) {
+        console.log("subject parse error:", err);
+    }
 
-    // Fallback → names found by NLP
-    const people = doc.people().out('array');
+    const people = doc.people().out("array");
     if (people.length > 0) return people[0];
 
     return null;
 }
 
-
-// 2️⃣ Extract Amount → MUST PRECEDE rs/rupees/₹
+// 2️⃣ Extract Amount → number MUST precede rs/rupees/₹
 function extractAmount(text) {
-    // Match patterns: "500rs", "500 rs", "500rupees", "500₹"
     const amountRegex = /\b([0-9]+(?:\.[0-9]+)?)\s*(rs\.?|rupees|₹)\b/i;
-
     const match = text.match(amountRegex);
+
     return match ? parseFloat(match[1]) : null;
 }
 
-
-// 3️⃣ Extract Phone Number → Strict 10 digits (no +91)
+// 3️⃣ Extract 10-digit Indian phone
 function extractPhone(text) {
     const phoneRegex = /\b[6-9][0-9]{9}\b/;
     const match = text.match(phoneRegex);
@@ -36,14 +40,12 @@ function extractPhone(text) {
     return match ? match[0] : null;
 }
 
-
-// 4️⃣ Extract Due Date → Using chrono-node
+// 4️⃣ Extract due date using chrono-node
 function extractDueDate(text) {
     return chrono.parseDate(text) || null;
 }
 
-
-// 5️⃣ Master Extractor
+// 5️⃣ Wrapper
 function extractAll(text) {
     return {
         name: extractName(text),
@@ -52,7 +54,6 @@ function extractAll(text) {
         phone: extractPhone(text)
     };
 }
-
 
 module.exports = {
     extractName,
