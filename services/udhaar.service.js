@@ -37,6 +37,8 @@ async function getHistory(chatId) {
         console.error('Unexpected error:', err);
         return [];
     }
+}
+
 async function deleteEntriesByName(chatId, name) {
     if (!chatId || !name) return 0;
 
