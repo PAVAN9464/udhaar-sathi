@@ -1,59 +1,49 @@
 const chrono = require("chrono-node");
 const nlp = require("compromise");
 
-// 1️⃣ Extract Name using compromise dependency parse
+// 1️⃣ Extract Name — using SUBJECT of the sentence (no plugins)
 function extractName(text) {
     const doc = nlp(text);
-    const parsed = doc.parse();
 
-    try {
-        const sentences = parsed.sentences();
-        if (sentences.length > 0) {
-            const subjects = sentences[0].subjects();
-            if (subjects.length > 0) {
-                return subjects[0].text().trim();
-            }
-        }
-    } catch (err) {
-        console.log("subject parse error:", err);
-    }
+    const subjects = doc.match('#Noun').out('array')
 
-    const people = doc.people().out("array");
-    if (people.length > 0) return people[0];
-
-    return null;
+    return subjects[0];
 }
 
-// 2️⃣ Extract Amount → number MUST precede rs/rupees/₹
+// 2️⃣ Extract Amount — number BEFORE rs / rupees / ₹
 function extractAmount(text) {
-    const amountRegex = /\b([0-9]+(?:\.[0-9]+)?)\s*(rs\.?|rupees|₹)\b/i;
-    const match = text.match(amountRegex);
-
+    const regex = /\b([0-9]+(?:\.[0-9]+)?)\s*(?=rs\.?|rupees|₹)/i;
+    const match = text.match(regex);
     return match ? parseFloat(match[1]) : null;
 }
 
-// 3️⃣ Extract 10-digit Indian phone
+// 3️⃣ Extract Phone — strict 10 digits (Indian pattern)
 function extractPhone(text) {
-    const phoneRegex = /\b[6-9][0-9]{9}\b/;
-    const match = text.match(phoneRegex);
-
+    const match = text.match(/\b[6-9][0-9]{9}\b/);
     return match ? match[0] : null;
 }
 
-// 4️⃣ Extract due date using chrono-node
+// 4️⃣ Extract Due Date — chrono
 function extractDueDate(text) {
     return chrono.parseDate(text) || null;
 }
 
-// 5️⃣ Wrapper
+// 5️⃣ Combined Extractor
 function extractAll(text) {
     return {
         name: extractName(text),
         amount: extractAmount(text),
+        phone: extractPhone(text),
         dueDate: extractDueDate(text),
-        phone: extractPhone(text)
     };
 }
+
+// TEST
+const text = "Ramesh 9876543210 has to pay 300rs in 3 days";
+console.log("Name:", extractName(text));
+console.log("Amount:", extractAmount(text));
+console.log("Phone:", extractPhone(text));
+console.log("Due Date:", extractDueDate(text));
 
 module.exports = {
     extractName,
