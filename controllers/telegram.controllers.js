@@ -1,3 +1,4 @@
+const { extractAll } = require("../extractor");
 const { sendTextMessage } = require("../utils/telegramApi");
 
 const sendMessage = async (req, res) => {
@@ -10,7 +11,14 @@ const sendMessage = async (req, res) => {
     const chatId = update.message.chat.id
     const text = update.message.text
 
-    await sendTextMessage(chatId, `${text} Was this the message you sent?`)
+    const {name, dueDate, amount, phone} = extractAll(text);
+
+    await sendTextMessage(chatId, `
+        name: ${name},
+        due date: ${dueDate},
+        amount: ${amount},
+        phone: ${phone}    
+    `)
 };
 
 module.exports = {

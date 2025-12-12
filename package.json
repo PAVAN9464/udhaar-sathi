@@ -19,8 +19,11 @@
   },
   "homepage": "https://github.com/PAVAN9464/udhaar-sathi#readme",
   "dependencies": {
+    "chrono-node": "^2.9.0",
+    "compromise": "^14.14.4",
     "dotenv": "^17.2.3",
     "express": "^4.22.1",
+    "natural": "^8.1.0",
     "node-telegram-bot-api": "^0.66.0"
   }
 }
