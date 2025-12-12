@@ -1,6 +1,7 @@
 const { extractAll, containsHistory } = require("../extractor");
 const { handleLoginStart, handleVerifyOtp, isUserLoggedIn } = require("../services/login.service");
 const { saveEntry, getHistory, deleteEntriesByName, updateDebtBalance, clearDebtTracker, getAllDebts, deleteEntryById, deleteAllHistory } = require("../services/udhaar.service");
+const { upsertUser } = require("../services/user.service");
 
 const { sendTextMessage, getFileLink, downloadFile } = require("../utils/telegramApi");
 const { translateToEnglish } = require("../utils/translate");
@@ -23,7 +24,16 @@ const sendMessage = async (req, res) => {
 
         const chatId = update.message.chat.id;
 
+        const chatId = update.message.chat.id;
 
+        // Extract phone if available (e.g. from contact share or user metadata if accessible)
+        // Note: update.message.contact only exists if user shared contact explicitly
+        // But the prompt says "phone if it exists", so we check for contact object.
+        const phone = update.message.contact ? update.message.contact.phone_number : null;
+        const firstName = update.message.from ? update.message.from.first_name : 'Shopkeeper';
+
+        // Persist User
+        await upsertUser(chatId, phone, firstName);
         let text = update.message.text;
         let voice = update.message.voice || update.message.audio;
 
@@ -205,7 +215,7 @@ const sendMessage = async (req, res) => {
                 await saveEntry({ chatId, name: nameToUpdate, amount: -amountPaid, phone: 'N/A', dueDate: null });
 
                 // 2. Update Ledger (Subtract)
-                const newBalance = await updateDebtBalance(chatId, nameToUpdate, -amountPaid);
+                const newBalance = await updateDebtBalance(chatId, nameToUpdate, -amountPaid, null, null, firstName);
 
                 await sendTextMessage(chatId, `📉 *Payment Recorded!*\n\nPaid ₹${amountPaid} for *${nameToUpdate}*.\nNew Balance: ₹${newBalance}`);
                 return;
@@ -217,7 +227,7 @@ const sendMessage = async (req, res) => {
                 await saveEntry({ chatId, name: `CLEARED: ${nameToClear}`, amount: 0, phone: null, dueDate: null });
 
                 // 2. Clear from Ledger
-                const success = await clearDebtTracker(chatId, nameToClear);
+                const success = await clearDebtTracker(chatId, nameToClear, firstName);
 
                 if (success) {
                     await sendTextMessage(chatId, `✅ Cleared debt balance for *${nameToClear}*.`);
@@ -287,7 +297,9 @@ const sendMessage = async (req, res) => {
         await saveEntry({ chatId, name, amount: finalAmount, phone, dueDate })
 
         // 2. Update Ledger
-        const netBalance = await updateDebtBalance(chatId, name, finalAmount, dueDate);
+        // extractAll returns phone if found in text, else null.
+        // We pass 'phone' (extracted from text) so it can be stored in debt_track.
+        const netBalance = await updateDebtBalance(chatId, name, finalAmount, dueDate, phone, firstName);
 
         if (isPayment) {
             await sendTextMessage(chatId, `📉 *Payment Recorded!*\n\nPaid ₹${Math.abs(amount)} for *${name}*.\nNet Balance: ₹${netBalance}`);

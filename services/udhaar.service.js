@@ -86,20 +86,63 @@ async function getDebtBalance(chatId, name) {
     }
 }
 
-async function updateDebtBalance(chatId, name, amountChange, dueDate = null) {
+// Notification Helper
+const { sendTextMessage } = require("../utils/telegramApi");
+
+async function notifyPayer(phone, shopkeeperName, amount, action, balance) {
+    if (!phone) return;
+
+    try {
+        // 1. Find payer chatId by phone
+        const { data: user, error } = await supabase
+            .from('users')
+            .select('chatId, name')
+            .eq('phone', phone)
+            .maybeSingle();
+
+        if (error || !user || !user.chatId) {
+            console.log(`Payer with phone ${phone} not found in users table.`);
+            return;
+        }
+
+        // 2. Construct Message
+        let msg = "";
+        const amountVal = Math.abs(amount);
+
+        if (action === 'ADD') {
+            msg = `🔔 *New Debt Added*\n\n👤 *${shopkeeperName || 'Shopkeeper'}* added a debt of ₹${amountVal}.\n📊 Your Net Balance with them: ₹${balance}`;
+        } else if (action === 'PAYMENT') {
+            msg = `📉 *Payment Recorded*\n\n👤 *${shopkeeperName || 'Shopkeeper'}* recorded a payment of ₹${amountVal}.\n📊 Your Net Balance with them: ₹${balance}`;
+        } else if (action === 'CLEAR') {
+            msg = `✅ *Debt Cleared*\n\n👤 *${shopkeeperName || 'Shopkeeper'}* cleared your dues.`;
+        }
+
+        if (msg) {
+            await sendTextMessage(user.chatId, msg);
+            console.log(`Notification sent to payer ${user.name} (${user.chatId})`);
+        }
+
+    } catch (err) {
+        console.error("Error sending notification to payer:", err);
+    }
+}
+
+async function updateDebtBalance(chatId, name, amountChange, dueDate = null, phone = null, shopkeeperName = null) {
     if (!chatId || !name) return 0;
 
     // 1. Get current record
     const currentRecord = await getDebtBalance(chatId, name);
 
     let newAmount = amountChange;
-    let finalDueDate = dueDate; // Default to new due date if provided
+    let finalDueDate = dueDate;
+    let finalPhone = phone;
 
     // Conversions: Database 'amount' is TEXT, so we parse float
     if (currentRecord) {
         const currentVal = parseFloat(currentRecord.amount);
         newAmount = (isNaN(currentVal) ? 0 : currentVal) + parseFloat(amountChange);
         if (!finalDueDate) finalDueDate = currentRecord.dueDate;
+        if (!finalPhone) finalPhone = currentRecord.phone; // Keep existing phone if not provided
     }
 
     // Convert back to string if column is text, though drivers usually handle it.
@@ -108,7 +151,8 @@ async function updateDebtBalance(chatId, name, amountChange, dueDate = null) {
         chatId: chatId,
         name: name,
         amount: String(newAmount), // Store as text per schema
-        dueDate: finalDueDate
+        dueDate: finalDueDate,
+        phone: finalPhone
     };
 
     // Manual Upsert Logic because constraints/indexes might be tricky
@@ -119,7 +163,7 @@ async function updateDebtBalance(chatId, name, amountChange, dueDate = null) {
         // Update existing
         const res = await supabase
             .from('debt_track')
-            .update({ amount: String(newAmount), dueDate: finalDueDate })
+            .update({ amount: String(newAmount), dueDate: finalDueDate, phone: finalPhone })
             .eq('id', currentRecord.id)
             .select();
         error = res.error;
@@ -136,17 +180,35 @@ async function updateDebtBalance(chatId, name, amountChange, dueDate = null) {
 
     if (error) {
         console.error("Error updating debt_track:", error);
+    } else {
+        // Notify Payer if we have a phone number (either new or existing)
+        // Determine action type
+        const action = amountChange > 0 ? 'ADD' : 'PAYMENT';
+        if (finalPhone) {
+            // We need shopkeeper name to be passed or fetched. 
+            // For now, let's accept it as arg.
+            await notifyPayer(finalPhone, shopkeeperName, amountChange, action, newAmount);
+        }
     }
 
     return newAmount;
 }
 
-async function clearDebtTracker(chatId, name) {
+async function clearDebtTracker(chatId, name, shopkeeperName = null) {
+    // Need to fetch phone before deleting to notify
+    let phoneToNotify = null;
+    const { data: record } = await supabase.from('debt_track').select('phone').eq('chatId', chatId).ilike('name', name).maybeSingle();
+    if (record) phoneToNotify = record.phone;
+
     const { error } = await supabase
         .from('debt_track')
         .delete()
         .eq('chatId', chatId)
         .ilike('name', name);
+
+    if (!error && phoneToNotify) {
+        await notifyPayer(phoneToNotify, shopkeeperName, 0, 'CLEAR', 0);
+    }
 
     return !error;
 }
