@@ -1,5 +1,7 @@
 const chrono = require("chrono-node");
 const nlp = require("compromise");
+const natural = require('natural');
+const tokenizer = new natural.WordTokenizer();
 
 // 1️⃣ Extract Name — using SUBJECT of the sentence (no plugins)
 function extractName(text) {
@@ -38,6 +40,23 @@ function extractAll(text) {
     };
 }
 
+function containsHistory(sentence) {
+    if (!sentence) return false;
+
+    const words = tokenizer.tokenize(sentence.toLowerCase());
+    const target = 'history';
+
+    // Check each word using Levenshtein distance
+    for (let word of words) {
+        const distance = natural.LevenshteinDistance(word, target);
+        // Allow small typos: distance <= 2
+        if (distance <= 2) {
+            return true;
+        }
+    }
+    return false;
+}
+
 // TEST
 const text = "Ramesh 9876543210 has to pay 300rs in 3 days";
 console.log("Name:", extractName(text));
@@ -50,5 +69,6 @@ module.exports = {
     extractAmount,
     extractPhone,
     extractDueDate,
-    extractAll
+    extractAll,
+    containsHistory
 };
