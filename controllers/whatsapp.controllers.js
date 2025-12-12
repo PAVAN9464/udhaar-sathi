@@ -1,7 +1,6 @@
 const { sendTextMessage } = require("../utils/metaApi");
 
 const sendMessage = async (req, res) => {
-    res.sendStatus(200)
     try {
         const entry = req.body.entry?.[0];
         const change = entry?.changes?.[0];
