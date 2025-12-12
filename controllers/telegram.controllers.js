@@ -13,22 +13,19 @@ const sendMessage = async (req, res) => {
     const chatId = update.message.chat.id
     const text = update.message.text
 
-    if (/^login (.+)/.test(text)) {
-        console.log(text)
-        if (/^login\s*$/i.test(text)) {
-            // User typed just 'login' with optional spaces
-            await sendTextMessage(chatId, "❌ Please provide your email.\nExample: login your@email.com");
-            return;
-        }
-        // ✅ Check if the user is already logged in
+    // LOGIN
+    if (/^login\s*$/i.test(text)) {
+    // Check if already logged in
         if (isUserLoggedIn(chatId)) {
-            await sendTextMessage(chatId, "✔️ You are already logged in. No need to login again.");
+            await sendTextMessage(chatId, "✔️ You are already logged in.");
             return;
         }
-        const match = text.match(/^login (.+)/)
-        await handleLoginStart(chatId, match[1])
-        return
-    }
+
+        // Trigger OTP flow
+        await handleLoginStart(chatId);
+    return;
+}
+
 
     if (/^verify\s+(.+)/i.test(text)) {
         const match = text.match(/^verify\s+(.+)/i);

@@ -11,14 +11,14 @@ function generateOTP() {
 const handleLoginStart = async (chatId) => {
     const otp = generateOTP();
 
-    // Store OTP with 3-min expiry
+    // Store OTP with 1-min expiry
     otpStore.set(chatId, {
       otp,
-      expires: Date.now() + 3 * 60 * 1000 // 3 mins
+      expires: Date.now() + 1 * 60 * 1000 // 1 mins
     });
 
     // Send OTP directly to Telegram
-    await sendTextMessage(chatId, `✅ Your OTP is: ${otp}\nIt expires in 3 minutes. Please send: verify <otp>`);
+    await sendTextMessage(chatId, `✅ Your OTP is: ${otp}\nIt expires in 1 minutes. Please send: verify <otp>`);
 
     return;
 };
@@ -43,10 +43,10 @@ const handleVerifyOtp = (chatId, userOtp) => {
     otpStore.delete(chatId);
     sessionStore.set(chatId, {
         loggedIn: true,
-        expiresAt: Date.now() + 10 * 60 * 1000 // 10 mins session
+        expiresAt: Date.now() + 1 * 60 * 1000 // 1 mins session
     });
 
-    return `🎉 OTP verified! You are now logged in for 10 minutes.`;
+    return `🎉 OTP verified! You are now logged in for 1 minutes.`;
 };
 
 const isUserLoggedIn = (chatId) => {
