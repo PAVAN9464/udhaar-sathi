@@ -24,7 +24,6 @@ const sendMessage = async (req, res) => {
 
         const chatId = update.message.chat.id;
 
-        const chatId = update.message.chat.id;
 
         // Extract phone if available (e.g. from contact share or user metadata if accessible)
         // Note: update.message.contact only exists if user shared contact explicitly
