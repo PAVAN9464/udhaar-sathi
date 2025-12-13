@@ -87,24 +87,28 @@ async function extractTransactionDetails(text) {
             messages: [
                 {
                     role: "system",
-                    content: `You are a helper extracting debt/credit details from text.
-Return a JSON object: { "name": string, "amount": number, "intent": "DEBIT"|"CREDIT" }
-- "name": The full name of the person (Capitalized).
-- "amount": The numeric amount.
-- "intent": Determines the transaction type from the USER's perspective:
-  
-  CREDIT = Someone owes the user money (debt added):
-  - "Ramesh 500" → CREDIT (Ramesh owes user ₹500)
-  - "Given to Ramesh 500" → CREDIT (User gave Ramesh ₹500, so Ramesh owes user)
-  - "Lent Suresh 1000" → CREDIT (User lent money, Suresh owes user)
-  
-  DEBIT = Payment received/made that reduces debt:
-  - "Paid Ramesh 200" → DEBIT (User paid Ramesh, reduces what Ramesh owes user)
-  - "Received 200 from Ramesh" → DEBIT (Ramesh paid user, reduces what Ramesh owes user)
-  - "Ramesh paid 300" → DEBIT (Ramesh paid user, reduces his debt)
-  - "Got 500 from Suresh" → DEBIT (Suresh paid user)
+                    content: `Extract debt transaction details from text. Return JSON: { "name": string, "amount": number, "intent": "DEBIT"|"CREDIT" }
 
-If not clear, return null.`
+Rules:
+- "name": Person's full name (Capitalized)
+- "amount": Numeric value
+- "intent": Based on who is giving/receiving money:
+
+CREDIT (someone owes user money):
+- "Ramesh 500" = User gave Ramesh 500 → CREDIT
+- "Lent Suresh 1000" = User lent money → CREDIT
+- "Given to Ramesh 500" = User gave money → CREDIT
+
+DEBIT (payment that reduces debt):
+- "Ramesh paid 300" = Ramesh gave user 300 → DEBIT
+- "Received 200 from Ramesh" = User received from Ramesh → DEBIT  
+- "Ramesh returned 500" = Ramesh gave back money → DEBIT
+- "Got 400 from Suresh" = User got money from Suresh → DEBIT
+
+Key: If PERSON'S NAME is doing the paying/giving → DEBIT
+     If USER is doing the paying/giving → CREDIT
+
+Return null if unclear.`
                 },
                 {
                     role: "user",
