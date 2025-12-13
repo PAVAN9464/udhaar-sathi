@@ -67,7 +67,7 @@ async function analyzeDebtImage(imageUrl) {
                     ]
                 }
             ],
-            model: "llama-3.2-90b-vision-instruct",
+            model: "meta-llama/llama-4-scout-17b-16e-instruct",
             response_format: { type: "json_object" }
         });
 
