@@ -1,5 +1,5 @@
 const { extractAll, containsHistory } = require("../extractor");
-const { handleLoginStart, handleVerifyOtp, isUserLoggedIn } = require("../services/login.service");
+
 const { saveEntry, getHistory, deleteEntriesByName, updateDebtBalance, clearDebtTracker, getAllDebts, deleteEntryById, deleteAllHistory } = require("../services/udhaar.service");
 const { upsertUser } = require("../services/user.service");
 const { sendTextMessage, getFileLink, downloadFile, sendPhoto, answerCallbackQuery } = require("../utils/telegramApi");
@@ -8,6 +8,10 @@ const { transcribeAudio, generateRoast, analyzeDebtImage } = require("../utils/g
 const { getRandomEmoji } = require("../utils/emojis");
 const fs = require("fs");
 const path = require("path");
+
+// Temporary Store for Confirmations
+// Key: chatId, Value: { type: 'PHOTO'|'VOICE', data: ... }
+const pendingConfirmations = new Map();
 
 const sendMessage = async (req, res) => {
     try {
@@ -83,6 +87,53 @@ const sendMessage = async (req, res) => {
 `;
                 await sendTextMessage(chatId, helpText);
             }
+            else if (data === 'confirm_action') {
+                const pending = pendingConfirmations.get(chatId);
+                if (!pending) {
+                    await sendTextMessage(chatId, "⚠️ Session expired or no data found to confirm.");
+                } else {
+                    const items = pending.data;
+                    let summary = "✅ *Action Confirmed!*";
+
+                    // Process items
+                    for (const item of items) {
+                        const pName = item.name ? item.name.toUpperCase() : 'UNKNOWN';
+                        const pAmount = parseFloat(item.amount);
+                        const pIntent = item.intent || 'DEBIT'; // Default to DEBIT if not specified (Photos usually implied debt)
+
+                        // Handle Intent from Voice extraction
+                        let finalAmount = pAmount;
+                        if (pIntent === 'DEBIT') finalAmount = -Math.abs(pAmount);
+                        else finalAmount = Math.abs(pAmount); // CREDIT/PAYMENT
+
+                        if (pName && !isNaN(pAmount)) {
+                            // Save to History
+                            await saveEntry({ chatId, name: pName, amount: finalAmount, phone: null, dueDate: null });
+                            // Update Ledger
+                            const newBal = await updateDebtBalance(chatId, pName, finalAmount, null, null, firstName);
+
+                            // Formatting for summary
+                            // If it was a payment
+                            if (finalAmount > 0) { // Payment/Credit
+                                summary += `\n\n🟢 *Payment Recorded*\nPaid ₹${Math.abs(pAmount)} for *${pName}*.\n👉 Balance: ₹${newBal}`;
+                            } else { // Debt
+                                summary += `\n\n🔴 *Debt Added*\n${pName}: ₹${Math.abs(pAmount)}\n👉 Balance: ₹${newBal}`;
+                            }
+                        }
+                    }
+
+                    await sendTextMessage(chatId, summary);
+                    pendingConfirmations.delete(chatId);
+                }
+            }
+            else if (data === 'cancel_action') {
+                if (pendingConfirmations.has(chatId)) {
+                    pendingConfirmations.delete(chatId);
+                    await sendTextMessage(chatId, "❌ *Action Cancelled.* Data discarded.");
+                } else {
+                    await sendTextMessage(chatId, "❌ Nothing to cancel.");
+                }
+            }
 
             return;
         }
@@ -111,22 +162,34 @@ const sendMessage = async (req, res) => {
             else if (result && result.debts && Array.isArray(result.debts)) items = result.debts;
 
             if (items.length === 0) {
-                await sendTextMessage(chatId, "🤷‍♂️ specific debts found in image.");
+                await sendTextMessage(chatId, "🤷‍♂️ No specific debts found in image.");
                 return;
             }
 
-            let summary = "📝 *Extracted Debts:*";
-            for (const item of items) {
-                const pName = item.name ? item.name.toUpperCase() : 'UNKNOWN';
-                const pAmount = parseFloat(item.amount);
-                if (pName && !isNaN(pAmount)) {
-                    await saveEntry({ chatId, name: pName, amount: pAmount, phone: null, dueDate: null });
-                    const newBal = await updateDebtBalance(chatId, pName, pAmount, null, null, firstName);
-                    summary += `\n• ${pName}: ₹${pAmount} (Bal: ₹${newBal})`;
-                }
-            }
+            // Store in Pending Map
+            pendingConfirmations.set(chatId, {
+                type: 'PHOTO',
+                data: items
+            });
 
-            await sendTextMessage(chatId, summary);
+            console.log("Pending Confirmation set for:", chatId, items);
+
+            let summary = "📝 *Extracted Debts (Pending Confirmation):*";
+            for (const item of items) {
+                summary += `\n• ${item.name}: ₹${item.amount}`;
+            }
+            summary += "\n\nDo you want to save these?";
+
+            const keyboard = {
+                inline_keyboard: [
+                    [
+                        { text: "✅ Confirm", callback_data: "confirm_action" },
+                        { text: "❌ Cancel", callback_data: "cancel_action" }
+                    ]
+                ]
+            };
+
+            await sendTextMessage(chatId, summary, keyboard);
             return;
         }
 
@@ -170,9 +233,34 @@ const sendMessage = async (req, res) => {
                         // Clean up
                         fs.unlink(tempFilePath, (err) => { if (err) console.error("Temp file delete error", err); });
 
+
                         if (text) {
-                            await sendTextMessage(chatId, `🗣️ *Heard:* "${text}"`);
-                            // Fall out of if(voice) block and let normal text processing handle 'text'
+                            // Extract details from the voice text
+                            const extracted = extractAll(text);
+
+                            // Check if extraction found a name and amount
+                            if (extracted.name && extracted.amount) {
+                                // Store pending confirmation
+                                pendingConfirmations.set(chatId, {
+                                    type: 'VOICE',
+                                    data: [extracted], // Store as an array to reuse photo logic
+                                    rawText: text
+                                });
+
+                                const summary = `🗣️ *Heard:* "${text}"\n\n📝 *Extracted:*\n• Name: ${extracted.name}\n• Amount: ${extracted.amount}\n\nDo you want to save this?`;
+
+                                const keyboard = {
+                                    inline_keyboard: [
+                                        [
+                                            { text: "✅ Confirm", callback_data: "confirm_action" },
+                                            { text: "❌ Cancel", callback_data: "cancel_action" }
+                                        ]
+                                    ]
+                                };
+                                await sendTextMessage(chatId, summary, keyboard);
+                            } else {
+                                await sendTextMessage(chatId, `🗣️ *Heard:* "${text}"\n\n⚠️ Could not extract Name and Amount clearly. Please try saying: "Ramesh 500 rupees"`);
+                            }
                         } else {
                             await sendTextMessage(chatId, "⚠️ Could not transcribe audio. Please try again.");
                             return;
@@ -211,18 +299,14 @@ const sendMessage = async (req, res) => {
                 `🧹 *Clear Debt:* "Clear Ramesh"\n` +
                 `📜 *History:* "Show history" or "History"\n` +
                 `📊 *Summary:* "/summary" - View all net balances\n` +
-                `�️ *Reset:* "Reset Bot" - Delete ALL data\n` +
-                `�🔒 *Login:* "login" - Start secure session`;
+                `️ *Reset:* "Reset Bot" - Delete ALL data`;
             await sendTextMessage(chatId, helpMsg);
             return;
         }
 
         // RESET / CLEAR ALL
         if (/^reset bot$/i.test(text) || /^clear all history$/i.test(text)) {
-            if (!isUserLoggedIn(chatId)) {
-                await sendTextMessage(chatId, "🔒 Please login first to reset data. Send: login");
-                return;
-            }
+
 
             // Optional: Ask for confirmation? For now, direct action as it's a specific command.
             const success = await deleteAllHistory(chatId);
@@ -237,10 +321,7 @@ const sendMessage = async (req, res) => {
         // SUMMARY (Ledger)
         if (/^\/summary$/i.test(text) || /^summary$/i.test(text)) {
             // Check login
-            if (!isUserLoggedIn(chatId)) {
-                await sendTextMessage(chatId, "🔒 Please login first. Send: login");
-                return;
-            }
+
 
             const debts = await getAllDebts(chatId);
             if (!debts || debts.length === 0) {
@@ -372,41 +453,11 @@ Choose an option below:
             return;
         }
 
-        // LOGIN
-        if (/^login\s*$/i.test(text)) {
-            // Check if already logged in
-            if (isUserLoggedIn(chatId)) {
-                await sendTextMessage(chatId, "✔️ You are already logged in.");
-                return;
-            }
 
-            // Trigger OTP flow
-            await handleLoginStart(chatId);
-            return;
-        }
-
-
-        if (/^verify\s+(.+)/i.test(text)) {
-            const match = text.match(/^verify\s+(.+)/i);
-            const otpStr = match ? match[1].trim() : "";
-
-            // Check if OTP is numeric and 4 digits
-            if (!/^\d{4}$/.test(otpStr)) {
-                await sendTextMessage(chatId, "❌ Invalid OTP format. Please enter a 4-digit OTP.\nExample: verify 1234");
-                return;
-            }
-
-            const reply = handleVerifyOtp(chatId, otpStr);
-            await sendTextMessage(chatId, reply);
-            return;
-        }
 
         // CLEAR / SETTLE
         if (/^(clear|paid)\s+(.+)/i.test(text)) {
-            if (!isUserLoggedIn(chatId)) {
-                await sendTextMessage(chatId, "🔒 Please login first to manage debts. Send: login");
-                return;
-            }
+
 
             const match = text.match(/^(?:clear|paid)\s+(.+)/i);
             const content = match ? match[1].trim() : "";
