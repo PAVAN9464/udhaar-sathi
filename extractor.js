@@ -4,29 +4,45 @@ const natural = require('natural');
 const tokenizer = new natural.WordTokenizer();
 
 // 1️⃣ Extract Name — using Person tag, fallback to Noun
+// 1️⃣ Extract Name — using Person tag, fallback to Noun -> Uppercase
 function extractName(text) {
     if (!text || typeof text !== 'string') return null;
     const doc = nlp(text);
 
     // First try to find a Person (capitalized names usually)
+    // .text() gives the raw text of the match, preserving spaces for full names
     let subjects = doc.people().out('array');
 
     if (subjects.length === 0) {
-        // Fallback to Nouns but exclude common non-name nouns if possible
-        // For now, just take the first Noun that isn't a date/number
+        // Fallback: nouns that look like names (Title case words)
+        // We look for consecutive TitleCase words to catch "Ramesh Nayak"
+        const titleCase = text.match(/[A-Z][a-z]+(?:\s[A-Z][a-z]+)*/g);
+        if (titleCase) {
+            // Filter out common keywords
+            const invalidNames = ['Rupees', 'Rs', 'History', 'Login', 'Clear', 'Paid', 'Verify', 'Summary', 'Help', 'Delete', 'Pay'];
+            const filtered = titleCase.filter(s => !invalidNames.includes(s));
+            if (filtered.length > 0) subjects = [filtered[0]];
+        }
+    }
+
+    // Final fallback to just nouns if still nothing, but be careful
+    if (subjects.length === 0) {
         subjects = doc.match('#Noun').not('#Date').not('#Value').out('array');
     }
 
-    // Filter out "rupees", "rs", "history", "login" if they strictly match
-    const invalidNames = ['rupees', 'rs', 'history', 'login', 'clear', 'paid', 'verify', 'summary', 'help', 'delete'];
+    // Filter out blocklist
+    const invalidNames = ['rupees', 'rs', 'history', 'login', 'clear', 'paid', 'verify', 'summary', 'help', 'delete', 'pay', 'amount'];
     const filtered = subjects.filter(s => !invalidNames.includes(s.toLowerCase()));
 
-    return filtered.length > 0 ? filtered[0] : null;
+    // Return UPPERCASE
+    return filtered.length > 0 ? filtered[0].toUpperCase() : null;
 }
 
 // 2️⃣ Extract Amount — number BEFORE/AFTER rs / rupees / ₹, or just a standalone number if context implies
+// 2️⃣ Extract Amount — explicit currency OR implicit number (avoiding phones/dates)
 function extractAmount(text) {
     if (!text || typeof text !== 'string') return null;
+
     // 1. Explicit currency: "500rs", "rs 500", "₹500"
     const explicitRegex = /(?:rs\.?|rupees|₹)\s*(\d+(?:\.\d+)?)|(\d+(?:\.\d+)?)\s*(?:rs\.?|rupees|₹)/i;
     const match = text.match(explicitRegex);
@@ -35,10 +51,31 @@ function extractAmount(text) {
         return parseFloat(match[1] || match[2]);
     }
 
-    // 2. Implicit if keywords like "pay", "owe", "gave" exist? 
-    // Risky, but if we found a number and it's the only number...
-    // Let's stick to explicit for now to avoid catching "2 days".
-    // Or check if there is a number that is NOT part of a phone / date.
+    // 2. Implicit Number
+    // Strategy: Find numbers that are NOT:
+    // - Part of a phone number (10 digits starting with 6-9)
+    // - Followed by date/time units (days, months, years, hrs, mins)
+
+    const words = text.split(/\s+/);
+    for (let i = 0; i < words.length; i++) {
+        const w = words[i];
+        const val = parseFloat(w);
+        if (!isNaN(val)) {
+            // Check if it looks like a phone number (10 digits)
+            if (/^[6-9]\d{9}$/.test(w)) continue; // It's a phone number
+
+            // Check if next word is a time unit
+            if (i + 1 < words.length) {
+                const nextWord = words[i + 1].toLowerCase();
+                if (['day', 'days', 'week', 'weeks', 'month', 'months', 'year', 'years', 'hr', 'min'].some(u => nextWord.startsWith(u))) {
+                    continue; // It's a date/time
+                }
+            }
+
+            // If we passed checks, this is likely the amount
+            return val;
+        }
+    }
 
     return null;
 }
@@ -89,7 +126,7 @@ function containsHistory(sentence) {
 }
 
 // TEST
-const text = "Ramesh 9876543210 has to pay 300rs in 3 days";
+const text = "Ramesh Nayak 9876121235 has to pay 300 in 3 days";
 console.log("Name:", extractName(text));
 console.log("Amount:", extractAmount(text));
 console.log("Phone:", extractPhone(text));
