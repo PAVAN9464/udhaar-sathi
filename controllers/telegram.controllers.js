@@ -566,6 +566,13 @@ Choose an option below:
             await sendTextMessage(chatId, message)
             return
 
+
+        }
+
+        // Safety check: Ensure we have valid text before processing
+        if (!text || typeof text !== 'string' || text.trim() === '') {
+            console.log("No valid text to process, skipping extraction");
+            return;
         }
 
         // HYBRID EXTRACTION: Regex (Phone/Date) + LLM (Name/Amount/Intent)
@@ -581,7 +588,12 @@ Choose an option below:
 
         const name = llmResult?.name ? llmResult.name.toUpperCase() : regexResult.name;
         const amount = llmResult?.amount !== undefined ? llmResult.amount : regexResult.amount;
-        const intent = llmResult?.intent || regexResult.intent;
+        let intent = llmResult?.intent || regexResult.intent;
+
+        // Simple keyword override: if text contains "paid", it's always a payment (DEBIT)
+        if (text.toLowerCase().includes('paid')) {
+            intent = 'DEBIT';
+        }
 
         if (!name || amount === null || amount === undefined) {
             // Only send this if it doesn't match other commands and looks like a transaction attempt
