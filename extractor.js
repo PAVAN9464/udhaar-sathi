@@ -43,11 +43,14 @@ function extractAmount(text) {
     return null;
 }
 
-// 3️⃣ Extract Phone — strict 10 digits (Indian pattern)
+// 3️⃣ Extract Phone — strict 10 digits (Indian pattern), allows +91 or 91
 function extractPhone(text) {
     if (!text) return null;
-    const match = text.match(/\b[6-9][0-9]{9}\b/);
-    return match ? match[0] : null;
+    // Matches:
+    // 1. Optional +91 or 91
+    // 2. 6-9 followed by 9 digits
+    const match = text.match(/(?:\+?91|91)?\s?([6-9][0-9]{9})\b/);
+    return match ? match[1] : null; // match[1] captures the 10 digits
 }
 
 // 4️⃣ Extract Due Date — chrono

@@ -17,14 +17,24 @@ async function upsertUser(chatId, phone, name) {
         }
 
         const updates = {};
-        if (phone) updates.phone = phone;
+
+        // Normalize phone: remove non-digits, take last 10
+        let normalizedPhone = phone;
+        if (phone) {
+            const digits = phone.replace(/\D/g, '');
+            if (digits.length > 10) normalizedPhone = digits.slice(-10);
+            else normalizedPhone = digits;
+        }
+
+        if (normalizedPhone) updates.phone = normalizedPhone;
         if (name) updates.name = name;
 
         if (existingUser) {
             // Update if necessary
             // Only update if values are different or new
             let needsUpdate = false;
-            if (phone && existingUser.phone !== phone) needsUpdate = true;
+            // Use normalized phone for comparison
+            if (normalizedPhone && existingUser.phone !== normalizedPhone) needsUpdate = true;
             if (name && existingUser.name !== name) needsUpdate = true;
 
             if (needsUpdate) {
@@ -47,7 +57,7 @@ async function upsertUser(chatId, phone, name) {
                 .insert([
                     {
                         chatId: String(chatId),
-                        phone: phone || null,
+                        phone: normalizedPhone || null,
                         name: name || null
                     }
                 ])
