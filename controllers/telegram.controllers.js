@@ -644,8 +644,9 @@ Choose an option below:
         console.error("Critical Error in sendMessage:", err);
         // Optionally send a friendly error message to user if we have chatId
         // Not attempting here to avoid loop if sendTextMessage fails
-    };
-
-    module.exports = {
-        sendMessage
     }
+}
+
+module.exports = {
+    sendMessage
+}
