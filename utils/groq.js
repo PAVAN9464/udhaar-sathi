@@ -91,11 +91,19 @@ async function extractTransactionDetails(text) {
 Return a JSON object: { "name": string, "amount": number, "intent": "DEBIT"|"CREDIT" }
 - "name": The full name of the person (Capitalized).
 - "amount": The numeric amount.
-- "intent": "CREDIT" if adding a debt (someone owes user), "DEBIT" if recording a payment (user paid / debt cleared).
-  - "Ramesh 500" -> CREDIT
-  - "Given to Ramesh 500" -> CREDIT
-  - "Paid Ramesh 200" -> DEBIT (or Payment)
-  - "Received 200 from Ramesh" -> DEBIT (Payment)
+- "intent": Determines the transaction type from the USER's perspective:
+  
+  CREDIT = Someone owes the user money (debt added):
+  - "Ramesh 500" → CREDIT (Ramesh owes user ₹500)
+  - "Given to Ramesh 500" → CREDIT (User gave Ramesh ₹500, so Ramesh owes user)
+  - "Lent Suresh 1000" → CREDIT (User lent money, Suresh owes user)
+  
+  DEBIT = Payment received/made that reduces debt:
+  - "Paid Ramesh 200" → DEBIT (User paid Ramesh, reduces what Ramesh owes user)
+  - "Received 200 from Ramesh" → DEBIT (Ramesh paid user, reduces what Ramesh owes user)
+  - "Ramesh paid 300" → DEBIT (Ramesh paid user, reduces his debt)
+  - "Got 500 from Suresh" → DEBIT (Suresh paid user)
+
 If not clear, return null.`
                 },
                 {
