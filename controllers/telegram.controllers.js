@@ -25,6 +25,20 @@ const sendMessage = async (req, res) => {
             return;
         }
 
+        const phone = (update.message && update.message.contact) ? update.message.contact.phone_number : null;
+        let firstName = 'Shopkeeper';
+        if (update.callback_query && update.callback_query.from) {
+            firstName = update.callback_query.from.first_name;
+        } else if (update.message && update.message.from) {
+            firstName = update.message.from.first_name;
+        }
+
+        // Persist User immediately if we have info
+        if (chatId) await upsertUser(chatId, phone, firstName);
+
+
+
+
         if (update.callback_query) {
             const callback = update.callback_query;
             const data = callback.data;
@@ -125,15 +139,7 @@ const sendMessage = async (req, res) => {
 
 
 
-        // Extract phone if available (e.g. from contact share or user metadata if accessible)
-        // Note: update.message.contact only exists if user shared contact explicitly
-        // But the prompt says "phone if it exists", so we check for contact object.
-        const phone = update.message.contact ? update.message.contact.phone_number : null;
-        console.log("DEBUG: Controller extracted phone:", phone, "Type:", typeof phone);
-        const firstName = update.message.from ? update.message.from.first_name : 'Shopkeeper';
 
-        // Persist User
-        await upsertUser(chatId, phone, firstName);
         let text = update.message.text;
         let voice = update.message.voice || update.message.audio;
 
