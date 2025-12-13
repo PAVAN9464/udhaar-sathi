@@ -53,4 +53,30 @@ async function generateRoast(ledgerContext) {
     }
 }
 
-module.exports = { transcribeAudio, generateRoast };
+async function analyzeDebtImage(imageUrl) {
+    if (!process.env.GROQ_API_KEY) return null;
+
+    try {
+        const completion = await groq.chat.completions.create({
+            messages: [
+                {
+                    role: "user",
+                    content: [
+                        { type: "text", text: "Extract a JSON list of debts from this image. Format: [{ \"name\": \"John\", \"amount\": 100 }]. Ignore crossed-out text. Combine multiple amounts for same person into separate entries." },
+                        { type: "image_url", image_url: { url: imageUrl } }
+                    ]
+                }
+            ],
+            model: "llama-3.2-90b-vision-preview",
+            response_format: { type: "json_object" }
+        });
+
+        const jsonStr = completion.choices[0]?.message?.content;
+        return jsonStr ? JSON.parse(jsonStr) : null;
+    } catch (error) {
+        console.error("Groq Vision Error:", error?.message || error);
+        return null;
+    }
+}
+
+module.exports = { transcribeAudio, generateRoast, analyzeDebtImage };
