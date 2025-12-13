@@ -2,7 +2,6 @@ const { extractAll, containsHistory } = require("../extractor");
 const { handleLoginStart, handleVerifyOtp, isUserLoggedIn } = require("../services/login.service");
 const { saveEntry, getHistory, deleteEntriesByName, updateDebtBalance, clearDebtTracker, getAllDebts, deleteEntryById, deleteAllHistory } = require("../services/udhaar.service");
 const { upsertUser } = require("../services/user.service");
-const unusedVariable = 123 //trying to break the code
 const { sendTextMessage, getFileLink, downloadFile } = require("../utils/telegramApi");
 const { translateToEnglish } = require("../utils/translate");
 const { transcribeAudio } = require("../utils/groq");
