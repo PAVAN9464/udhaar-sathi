@@ -79,4 +79,41 @@ async function analyzeDebtImage(imageUrl) {
     }
 }
 
-module.exports = { transcribeAudio, generateRoast, analyzeDebtImage };
+async function extractTransactionDetails(text) {
+    if (!process.env.GROQ_API_KEY) return null;
+
+    try {
+        const completion = await groq.chat.completions.create({
+            messages: [
+                {
+                    role: "system",
+                    content: `You are a helper extracting debt/credit details from text.
+Return a JSON object: { "name": string, "amount": number, "intent": "DEBIT"|"CREDIT" }
+- "name": The full name of the person (Capitalized).
+- "amount": The numeric amount.
+- "intent": "CREDIT" if adding a debt (someone owes user), "DEBIT" if recording a payment (user paid / debt cleared).
+  - "Ramesh 500" -> CREDIT
+  - "Given to Ramesh 500" -> CREDIT
+  - "Paid Ramesh 200" -> DEBIT (or Payment)
+  - "Received 200 from Ramesh" -> DEBIT (Payment)
+If not clear, return null.`
+                },
+                {
+                    role: "user",
+                    content: text
+                }
+            ],
+            model: "llama-3.3-70b-versatile",
+            response_format: { type: "json_object" },
+            temperature: 0.0
+        });
+
+        const jsonStr = completion.choices[0]?.message?.content;
+        return jsonStr ? JSON.parse(jsonStr) : null;
+    } catch (error) {
+        console.error("Groq Extraction Error:", error?.message || error);
+        return null;
+    }
+}
+
+module.exports = { transcribeAudio, generateRoast, analyzeDebtImage, extractTransactionDetails };

@@ -4,7 +4,7 @@ const { saveEntry, getHistory, deleteEntriesByName, updateDebtBalance, clearDebt
 const { upsertUser } = require("../services/user.service");
 const { sendTextMessage, getFileLink, downloadFile, sendPhoto, answerCallbackQuery } = require("../utils/telegramApi");
 const { translateToEnglish } = require("../utils/translate");
-const { transcribeAudio, generateRoast, analyzeDebtImage } = require("../utils/groq");
+const { transcribeAudio, generateRoast, analyzeDebtImage, extractTransactionDetails } = require("../utils/groq");
 const { getRandomEmoji } = require("../utils/emojis");
 const fs = require("fs");
 const path = require("path");
@@ -100,21 +100,27 @@ const sendMessage = async (req, res) => {
                         const pName = item.name ? item.name.toUpperCase() : 'UNKNOWN';
                         const pAmount = parseFloat(item.amount);
                         const pIntent = item.intent || 'DEBIT'; // Default to DEBIT if not specified (Photos usually implied debt)
+                        const pPhone = item.phone || null;
+                        const pDate = item.dueDate || null;
 
                         // Handle Intent from Voice extraction
                         let finalAmount = pAmount;
                         if (pIntent === 'DEBIT') finalAmount = -Math.abs(pAmount);
-                        else finalAmount = Math.abs(pAmount); // CREDIT/PAYMENT
+                        else finalAmount = Math.abs(pAmount); // CREDIT - Positive
 
                         if (pName && !isNaN(pAmount)) {
                             // Save to History
-                            await saveEntry({ chatId, name: pName, amount: finalAmount, phone: null, dueDate: null });
+                            await saveEntry({ chatId, name: pName, amount: finalAmount, phone: pPhone, dueDate: pDate });
                             // Update Ledger
-                            const newBal = await updateDebtBalance(chatId, pName, finalAmount, null, null, firstName);
+                            const newBal = await updateDebtBalance(chatId, pName, finalAmount, pDate, pPhone, firstName);
 
                             // Formatting for summary
                             // If it was a payment
-                            if (finalAmount > 0) { // Payment/Credit
+                            if (finalAmount < 0) { // Payment Logic (My Debt Reduced or They paid me) -> We treat Negative as "I paid" or "They paid"?
+                                // Wait, sign convention check:
+                                // "Ramesh 500" -> CREDIT -> +500.
+                                // "Paid Ramesh 200" -> DEBIT -> -200.
+                                // So DEBIT IS NEGATIVE.
                                 summary += `\n\n🟢 *Payment Recorded*\nPaid ₹${Math.abs(pAmount)} for *${pName}*.\n👉 Balance: ₹${newBal}`;
                             } else { // Debt
                                 summary += `\n\n🔴 *Debt Added*\n${pName}: ₹${Math.abs(pAmount)}\n👉 Balance: ₹${newBal}`;
@@ -234,9 +240,19 @@ const sendMessage = async (req, res) => {
                         fs.unlink(tempFilePath, (err) => { if (err) console.error("Temp file delete error", err); });
 
 
+
                         if (text) {
-                            // Extract details from the voice text
-                            const extracted = extractAll(text);
+                            // HYBRID EXTRACTION
+                            const regexResult = extractAll(text);
+                            const llmResult = await extractTransactionDetails(text);
+
+                            const extracted = {
+                                name: llmResult?.name ? llmResult.name.toUpperCase() : regexResult.name,
+                                amount: llmResult?.amount !== undefined ? llmResult.amount : regexResult.amount,
+                                intent: llmResult?.intent || regexResult.intent,
+                                phone: regexResult.phone,
+                                dueDate: regexResult.dueDate
+                            };
 
                             // Check if extraction found a name and amount
                             if (extracted.name && extracted.amount) {
@@ -247,7 +263,7 @@ const sendMessage = async (req, res) => {
                                     rawText: text
                                 });
 
-                                const summary = `🗣️ *Heard:* "${text}"\n\n📝 *Extracted:*\n• Name: ${extracted.name}\n• Amount: ${extracted.amount}\n\nDo you want to save this?`;
+                                const summary = `🗣️ *Heard:* "${text}"\n\n📝 *Extracted:*\n• Name: ${extracted.name}\n• Amount: ${extracted.amount}\n• Type: ${extracted.intent || 'CREDIT'}\n\nDo you want to save this?`;
 
                                 const keyboard = {
                                     inline_keyboard: [
@@ -552,9 +568,22 @@ Choose an option below:
 
         }
 
-        const { name, dueDate, amount, phone: extractedPhone, intent } = extractAll(text);
+        // HYBRID EXTRACTION: Regex (Phone/Date) + LLM (Name/Amount/Intent)
+        // 1. Fast Regex for Phone & Date
+        const { phone: extractedPhone, dueDate } = extractAll(text);
 
-        if (!name || amount === null) {
+        // 2. Smart LLM for Name, Amount, Intent
+        console.log("🧠 Extracting details with Groq...");
+        const llmResult = await extractTransactionDetails(text);
+
+        // Fallback to regex if LLM fails
+        const regexResult = extractAll(text);
+
+        const name = llmResult?.name ? llmResult.name.toUpperCase() : regexResult.name;
+        const amount = llmResult?.amount !== undefined ? llmResult.amount : regexResult.amount;
+        const intent = llmResult?.intent || regexResult.intent;
+
+        if (!name || amount === null || amount === undefined) {
             // Only send this if it doesn't match other commands and looks like a transaction attempt
             await sendTextMessage(chatId, "⚠️ Could not understand the transaction details.\nPlease specify a Name and Amount.\nExample: 'Ramesh 500rs' or 'Paid Ramesh 500'");
             return;
@@ -584,9 +613,33 @@ Choose an option below:
             userBalanceMsg = "All settled! No pending dues.";
         }
 
+        // UPI Link Generation
+        // If we have a phone number (extracted, or we might fetch from DB if needed)
+        // Note: We used extractedPhone above. updateDebtBalance also updates DB. 
+        // Ideally we should use the phone associated with the user.
+        let payButton = null;
+        const targetPhone = extractedPhone; // Or fetch from DB? using extractedPhone is immediate.
+
+        if (targetPhone && Math.abs(amount) > 0) {
+            // Generic UPI Link
+            // pa = Virtual Payment Address. We assume phone@upi as generic fallback.
+            // pn = Payee Name
+            // am = Amount
+            const upiLink = `upi://pay?pa=${targetPhone}@upi&pn=${encodeURIComponent(name)}&am=${Math.abs(amount)}&cu=INR`;
+            payButton = {
+                inline_keyboard: [
+                    [
+                        { text: `💸 Pay ₹${Math.abs(amount)} via UPI`, url: upiLink },
+                        { text: `📞 Call`, url: `tel:${targetPhone}` }
+                    ]
+                ]
+            };
+        }
+
+
         if (isPayment) {
             const emo = getRandomEmoji('PAYMENT');
-            await sendTextMessage(chatId, `${emo} *Payment Recorded!*\n\nPaid ₹${Math.abs(amount)} for *${name}*.\n👉 ${userBalanceMsg}`);
+            await sendTextMessage(chatId, `${emo} *Payment Recorded!*\n\nPaid ₹${Math.abs(amount)} for *${name}*.\n👉 ${userBalanceMsg}`, payButton);
         } else {
             const emo = getRandomEmoji('DEBT_ADDED');
             const formattedDate = dueDate ? new Date(dueDate).toDateString() : 'N/A';
@@ -596,7 +649,7 @@ Choose an option below:
     💰 *Amount:* ₹${amount}
     👉 ${userBalanceMsg}
     📞 *Phone:* ${extractedPhone || 'N/A'}
-    📅 *Due Date:* ${formattedDate}`)
+    📅 *Due Date:* ${formattedDate}`, payButton)
         }
     } catch (err) {
         console.error("Critical Error in sendMessage:", err);
