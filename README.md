@@ -16,6 +16,7 @@ A powerful Telegram bot to track debts, expenses, and split bills. It features A
 - **🪙 Coin Flip**: Settle disputes with a random coin flip (/menu).
 
 ---
+## Sample images:
 
 ## 🛠️ Prerequisites
 

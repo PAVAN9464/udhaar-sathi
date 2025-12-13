@@ -575,24 +575,35 @@ Choose an option below:
             return;
         }
 
-        // HYBRID EXTRACTION: Regex (Phone/Date) + LLM (Name/Amount/Intent)
-        // 1. Fast Regex for Phone & Date
-        const { phone: extractedPhone, dueDate } = extractAll(text);
+        // PAYMENT KEYWORD DETECTION: Skip LLM for "paid" or "received"
+        const lowerText = text.toLowerCase();
+        const isPayment = lowerText.includes('paid') || lowerText.includes('received');
 
-        // 2. Smart LLM for Name, Amount, Intent
-        console.log("🧠 Extracting details with Groq...");
-        const llmResult = await extractTransactionDetails(text);
+        let name, amount, intent, extractedPhone, dueDate;
 
-        // Fallback to regex if LLM fails
-        const regexResult = extractAll(text);
+        if (isPayment) {
+            // REGEX-ONLY EXTRACTION for payments (no LLM call)
+            console.log("💸 Payment detected - using regex-only extraction");
+            const regexResult = extractAll(text);
+            
+            name = regexResult.name;
+            amount = regexResult.amount;
+            intent = 'DEBIT'; // Always DEBIT for payments
+            extractedPhone = regexResult.phone;
+            dueDate = regexResult.dueDate;
+        } else {
+            // HYBRID EXTRACTION: Regex (Phone/Date) + LLM (Name/Amount/Intent)
+            console.log("🧠 Extracting details with Groq...");
+            const llmResult = await extractTransactionDetails(text);
 
-        const name = llmResult?.name ? llmResult.name.toUpperCase() : regexResult.name;
-        const amount = llmResult?.amount !== undefined ? llmResult.amount : regexResult.amount;
-        let intent = llmResult?.intent || regexResult.intent;
+            // Fallback to regex if LLM fails
+            const regexResult = extractAll(text);
 
-        // Simple keyword override: if text contains "paid", it's always a payment (DEBIT)
-        if (text.toLowerCase().includes('paid')) {
-            intent = 'DEBIT';
+            name = llmResult?.name ? llmResult.name.toUpperCase() : regexResult.name;
+            amount = llmResult?.amount !== undefined ? llmResult.amount : regexResult.amount;
+            intent = llmResult?.intent || regexResult.intent;
+            extractedPhone = regexResult.phone;
+            dueDate = regexResult.dueDate;
         }
 
         if (!name || amount === null || amount === undefined) {
