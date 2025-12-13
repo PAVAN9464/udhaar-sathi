@@ -51,6 +51,8 @@ async function upsertUser(chatId, phone, name) {
                 } else {
                     console.log(`Updated user ${chatId}`);
                 }
+            } else {
+                console.log(`DEBUG: No update needed for user ${chatId}. Existing phone: '${existingUser.phone}', New normalized: '${normalizedPhone}'`);
             }
             return existingUser;
         } else {
