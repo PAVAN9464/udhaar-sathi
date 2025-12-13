@@ -99,11 +99,13 @@ const sendMessage = async (req, res) => {
                     for (const item of items) {
                         const pName = item.name ? item.name.toUpperCase() : 'UNKNOWN';
                         const pAmount = parseFloat(item.amount);
-                        const pIntent = item.intent || 'DEBIT'; // Default to DEBIT if not specified (Photos usually implied debt)
+                        const pIntent = item.intent || 'CREDIT'; // Default to CREDIT if not specified (Photos usually add debt)
                         const pPhone = item.phone || null;
                         const pDate = item.dueDate || null;
 
-                        // Handle Intent from Voice extraction
+                        // Handle Intent correctly:
+                        // CREDIT = Someone owes me = Positive amount
+                        // DEBIT = I paid someone = Negative amount
                         let finalAmount = pAmount;
                         if (pIntent === 'DEBIT') finalAmount = -Math.abs(pAmount);
                         else finalAmount = Math.abs(pAmount); // CREDIT - Positive
@@ -114,16 +116,13 @@ const sendMessage = async (req, res) => {
                             // Update Ledger
                             const newBal = await updateDebtBalance(chatId, pName, finalAmount, pDate, pPhone, firstName);
 
-                            // Formatting for summary
-                            // If it was a payment
-                            if (finalAmount < 0) { // Payment Logic (My Debt Reduced or They paid me) -> We treat Negative as "I paid" or "They paid"?
-                                // Wait, sign convention check:
-                                // "Ramesh 500" -> CREDIT -> +500.
-                                // "Paid Ramesh 200" -> DEBIT -> -200.
-                                // So DEBIT IS NEGATIVE.
-                                summary += `\n\n🟢 *Payment Recorded*\nPaid ₹${Math.abs(pAmount)} for *${pName}*.\n👉 Balance: ₹${newBal}`;
-                            } else { // Debt
-                                summary += `\n\n🔴 *Debt Added*\n${pName}: ₹${Math.abs(pAmount)}\n👉 Balance: ₹${newBal}`;
+                            // Format summary based on transaction type
+                            // finalAmount < 0 = Payment (DEBIT)
+                            // finalAmount > 0 = Debt Added (CREDIT)
+                            if (finalAmount < 0) {
+                                summary += `\n\n🟢 *Payment Recorded*\nPaid ₹${Math.abs(pAmount)} for *${pName}*.\n👉 New Balance: ₹${newBal}`;
+                            } else {
+                                summary += `\n\n🔴 *Debt Added*\n${pName}: ₹${Math.abs(pAmount)}\n👉 New Balance: ₹${newBal}`;
                             }
                         }
                     }
@@ -598,8 +597,6 @@ Choose an option below:
         await saveEntry({ chatId, name, amount: finalAmount, phone: extractedPhone, dueDate })
 
         // 2. Update Ledger
-        // extractAll returns phone if found in text, else null.
-        // We pass 'phone' (extracted from text) so it can be stored in debt_track.
         const netBalance = await updateDebtBalance(chatId, name, finalAmount, dueDate, extractedPhone, firstName);
 
         // Format Balance String (User Perspective)
@@ -614,32 +611,21 @@ Choose an option below:
             userBalanceMsg = "All settled! No pending dues.";
         }
 
-        // UPI Link Generation
-        // Using Markdown Link [Text](url) for direct redirection as Buttons don't support upi://
-        let upiLinkStr = "";
-        let targetPhone = extractedPhone;
-
-        if (targetPhone && amount > 0) {
-            // Generic UPI Link: phone@upi
-            const genericVpa = `${targetPhone}@upi`;
-            const upiLink = `upi://pay?pa=${genericVpa}&pn=${encodeURIComponent(name)}&am=${Math.abs(amount)}&cu=INR`;
-
-            // Append clickable link
-            upiLinkStr = `\n\n💸 [Tap to Pay via UPI](${upiLink})`;
-        }
-
-        const messageText = isPayment
-            ? `${getRandomEmoji('PAYMENT')} *Payment Recorded!*\n\nPaid ₹${Math.abs(amount)} for *${name}*.\n👉 ${userBalanceMsg}${upiLinkStr}`
-            : `${getRandomEmoji('DEBT_ADDED')} *Debt Added Successfully!*
+        // Format message based on transaction type
+        if (isPayment) {
+            const emo = getRandomEmoji('PAYMENT');
+            await sendTextMessage(chatId, `${emo} *Payment Recorded!*\n\nPaid ₹${Math.abs(amount)} for *${name}*.\n👉 ${userBalanceMsg}`);
+        } else {
+            const emo = getRandomEmoji('DEBT_ADDED');
+            const formattedDate = dueDate ? new Date(dueDate).toDateString() : 'N/A';
+            await sendTextMessage(chatId, `${emo} *Debt Added Successfully!*
     
     👤 *Name:* ${name}
     💰 *Amount:* ₹${amount}
     👉 ${userBalanceMsg}
     📞 *Phone:* ${extractedPhone || 'N/A'}
-    📅 *Due Date:* ${dueDate ? new Date(dueDate).toDateString() : 'N/A'}${upiLinkStr}`;
-
-        // Send Text with Markdown
-        await sendTextMessage(chatId, messageText);
+    📅 *Due Date:* ${formattedDate}`);
+        }
     } catch (err) {
         console.error("Critical Error in sendMessage:", err);
         // Optionally send a friendly error message to user if we have chatId

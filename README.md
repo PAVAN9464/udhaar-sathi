@@ -1,6 +1,6 @@
 # 🤑 Udhaar Sathi (Financial Ledger Bot)
 
-A powerful Telegram bot to track debts, expenses, and split bills. It features AI-powered extraction from text, voice notes, and images, along with direct UPI payment links and sarcastic financial roasts.
+A powerful Telegram bot to track debts, expenses, and split bills. It features AI-powered extraction from text, voice notes, and images, along with sarcastic financial roasts.
 
 ---
 
@@ -9,7 +9,6 @@ A powerful Telegram bot to track debts, expenses, and split bills. It features A
 - **📝 Debt Tracking**: Maintain a persistent ledger of who owes you (or who you owe).
 - **🗣️ Voice & AI**: Speak naturally ("Ramesh 500 next week") and the bot extracts Name, Amount, and Intent (Credit/Debit) using **Llama-3.3-70b**.
 - **📸 Smart Vision**: Upload a photo of a handwritten note, and the bot digitizes the debts.
-- **💸 UPI Integration**: Direct "Tap to Pay" links (`upi://`) generated from phone numbers.
 - **📜 Statement & History**: View detailed logs (/summary, /history) or get a visual Pie Chart (/chart).
 - **🔥 AI Roast**: Get a sarcastic reality check on your spending habits (/roast).
 - **📢 Notifications**: Automatically notifies the other party if their phone number is registered.
