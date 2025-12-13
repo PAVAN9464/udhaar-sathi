@@ -108,13 +108,27 @@ async function notifyPayer(phone, shopkeeperName, amount, action, balance) {
         // 2. Construct Message
         let msg = "";
         const amountVal = Math.abs(amount);
+        const shopkeeper = shopkeeperName || 'Shopkeeper';
+
+        // Format Balance String (Payer Perspective)
+        // Balance passed is from Shopkeeper's perspective (+ve means Shopkeeper is owed)
+        // So if balance > 0 => Payer Owes Shopkeeper
+        // If balance < 0 => Shopkeeper Owes Payer
+        let balanceMsg = "";
+        if (balance > 0) {
+            balanceMsg = `You owe ${shopkeeper} ₹${Math.abs(balance)}`;
+        } else if (balance < 0) {
+            balanceMsg = `${shopkeeper} owes you ₹${Math.abs(balance)}`;
+        } else {
+            balanceMsg = "All settled! No pending dues.";
+        }
 
         if (action === 'ADD') {
-            msg = `🔔 *New Debt Added*\n\n👤 *${shopkeeperName || 'Shopkeeper'}* added a debt of ₹${amountVal}.\n📊 Your Net Balance with them: ₹${balance}`;
+            msg = `🔔 *New Debt Added*\n\n👤 *${shopkeeper}* added a debt of ₹${amountVal}.\n👉 ${balanceMsg}`;
         } else if (action === 'PAYMENT') {
-            msg = `📉 *Payment Recorded*\n\n👤 *${shopkeeperName || 'Shopkeeper'}* recorded a payment of ₹${amountVal}.\n📊 Your Net Balance with them: ₹${balance}`;
+            msg = `📉 *Payment Recorded*\n\n👤 *${shopkeeper}* recorded a payment of ₹${amountVal}.\n👉 ${balanceMsg}`;
         } else if (action === 'CLEAR') {
-            msg = `✅ *Debt Cleared*\n\n👤 *${shopkeeperName || 'Shopkeeper'}* cleared your dues.`;
+            msg = `✅ *Debt Cleared*\n\n👤 *${shopkeeper}* cleared your dues.\n👉 ${balanceMsg}`;
         }
 
         if (msg) {

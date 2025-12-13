@@ -249,10 +249,15 @@ const sendMessage = async (req, res) => {
             }
 
             let msg = "📊 *Current Ledger (Net Balances):*\n\n";
+            msg += "-----------------------------------\n";
             debts.forEach(d => {
                 const val = parseFloat(d.amount);
                 if (!isNaN(val) && val !== 0) {
-                    msg += `👤 *${d.name}:* ₹${val.toFixed(2)}\n`;
+                    if (val > 0) {
+                        msg += `🟢 *${d.name}* owes you ₹${val.toFixed(2)}\n`;
+                    } else {
+                        msg += `� You owe *${d.name}* ₹${Math.abs(val).toFixed(2)}\n`;
+                    }
                 }
             });
 
@@ -478,7 +483,9 @@ Choose an option below:
                     }
 
                     message += `${index + 1}. *${entry.name || 'Unknown'}*\n`;
-                    message += `   💰 Amount: ₹${entry.amount || 0}\n`;
+                    const val = parseFloat(entry.amount || 0);
+                    const typeStr = val >= 0 ? "🔴 Debt Added" : "🟢 Payment/Credit";
+                    message += `   ${typeStr}: ₹${Math.abs(val)}\n`;
                     message += `   📞 Phone: ${entry.phone || 'N/A'}\n`;
                     message += `   ⏰ Due: ${dueDisplay}\n`;
                     message += `   🕒 Added: ${timestamp}\n\n`;
@@ -514,9 +521,21 @@ Choose an option below:
         // We pass 'phone' (extracted from text) so it can be stored in debt_track.
         const netBalance = await updateDebtBalance(chatId, name, finalAmount, dueDate, extractedPhone, firstName);
 
+        // Format Balance String (User Perspective)
+        // netBalance > 0 => They owe User
+        // netBalance < 0 => User owes Them
+        let userBalanceMsg = "";
+        if (netBalance > 0) {
+            userBalanceMsg = `*${name}* owes you ₹${Math.abs(netBalance)}`;
+        } else if (netBalance < 0) {
+            userBalanceMsg = `You owe *${name}* ₹${Math.abs(netBalance)}`;
+        } else {
+            userBalanceMsg = "All settled! No pending dues.";
+        }
+
         if (isPayment) {
             const emo = getRandomEmoji('PAYMENT');
-            await sendTextMessage(chatId, `${emo} *Payment Recorded!*\n\nPaid ₹${Math.abs(amount)} for *${name}*.\nNet Balance: ₹${netBalance}`);
+            await sendTextMessage(chatId, `${emo} *Payment Recorded!*\n\nPaid ₹${Math.abs(amount)} for *${name}*.\n👉 ${userBalanceMsg}`);
         } else {
             const emo = getRandomEmoji('DEBT_ADDED');
             const formattedDate = dueDate ? new Date(dueDate).toDateString() : 'N/A';
@@ -524,7 +543,7 @@ Choose an option below:
     
     👤 *Name:* ${name}
     💰 *Amount:* ₹${amount}
-    📊 *Net Balance:* ₹${netBalance}
+    👉 ${userBalanceMsg}
     📞 *Phone:* ${extractedPhone || 'N/A'}
     📅 *Due Date:* ${formattedDate}`)
         }
