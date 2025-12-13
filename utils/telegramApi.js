@@ -27,6 +27,7 @@ async function sendMessageChunk(chatId, text, replyMarkup = null) {
   const body = {
     chat_id: chatId,
     text,
+    parse_mode: 'Markdown',
   };
   if (replyMarkup) {
     body.reply_markup = replyMarkup;

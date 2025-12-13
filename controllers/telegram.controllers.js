@@ -274,6 +274,7 @@ const sendMessage = async (req, res) => {
                                     ]
                                 };
                                 await sendTextMessage(chatId, summary, keyboard);
+                                return;
                             } else {
                                 await sendTextMessage(chatId, `🗣️ *Heard:* "${text}"\n\n⚠️ Could not extract Name and Amount clearly. Please try saying: "Ramesh 500 rupees"`);
                             }
@@ -614,50 +615,37 @@ Choose an option below:
         }
 
         // UPI Link Generation
-        // If we have a phone number (extracted, or we might fetch from DB if needed)
-        // Note: We used extractedPhone above. updateDebtBalance also updates DB. 
-        // Ideally we should use the phone associated with the user.
-        let payButton = null;
-        const targetPhone = extractedPhone; // Or fetch from DB? using extractedPhone is immediate.
+        // Using Markdown Link [Text](url) for direct redirection as Buttons don't support upi://
+        let upiLinkStr = "";
+        let targetPhone = extractedPhone;
 
-        if (targetPhone && Math.abs(amount) > 0) {
-            // Generic UPI Link
-            // pa = Virtual Payment Address. We assume phone@upi as generic fallback.
-            // pn = Payee Name
-            // am = Amount
-            const upiLink = `upi://pay?pa=${targetPhone}@upi&pn=${encodeURIComponent(name)}&am=${Math.abs(amount)}&cu=INR`;
-            payButton = {
-                inline_keyboard: [
-                    [
-                        { text: `💸 Pay ₹${Math.abs(amount)} via UPI`, url: upiLink },
-                        { text: `📞 Call`, url: `tel:${targetPhone}` }
-                    ]
-                ]
-            };
+        if (targetPhone && amount > 0) {
+            // Generic UPI Link: phone@upi
+            const genericVpa = `${targetPhone}@upi`;
+            const upiLink = `upi://pay?pa=${genericVpa}&pn=${encodeURIComponent(name)}&am=${Math.abs(amount)}&cu=INR`;
+
+            // Append clickable link
+            upiLinkStr = `\n\n💸 [Tap to Pay via UPI](${upiLink})`;
         }
 
-
-        if (isPayment) {
-            const emo = getRandomEmoji('PAYMENT');
-            await sendTextMessage(chatId, `${emo} *Payment Recorded!*\n\nPaid ₹${Math.abs(amount)} for *${name}*.\n👉 ${userBalanceMsg}`, payButton);
-        } else {
-            const emo = getRandomEmoji('DEBT_ADDED');
-            const formattedDate = dueDate ? new Date(dueDate).toDateString() : 'N/A';
-            await sendTextMessage(chatId, `${emo} *Debt Added Successfully!*
+        const messageText = isPayment
+            ? `${getRandomEmoji('PAYMENT')} *Payment Recorded!*\n\nPaid ₹${Math.abs(amount)} for *${name}*.\n👉 ${userBalanceMsg}${upiLinkStr}`
+            : `${getRandomEmoji('DEBT_ADDED')} *Debt Added Successfully!*
     
     👤 *Name:* ${name}
     💰 *Amount:* ₹${amount}
     👉 ${userBalanceMsg}
     📞 *Phone:* ${extractedPhone || 'N/A'}
-    📅 *Due Date:* ${formattedDate}`, payButton)
-        }
+    📅 *Due Date:* ${dueDate ? new Date(dueDate).toDateString() : 'N/A'}${upiLinkStr}`;
+
+        // Send Text with Markdown
+        await sendTextMessage(chatId, messageText);
     } catch (err) {
         console.error("Critical Error in sendMessage:", err);
         // Optionally send a friendly error message to user if we have chatId
         // Not attempting here to avoid loop if sendTextMessage fails
-    }
-};
+    };
 
-module.exports = {
-    sendMessage
-}
+    module.exports = {
+        sendMessage
+    }
