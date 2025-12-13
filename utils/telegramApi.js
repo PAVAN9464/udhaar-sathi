@@ -69,4 +69,27 @@ async function downloadFile(url, destPath) {
   }
 }
 
-module.exports = { sendTextMessage, getFileLink, downloadFile };
+async function sendPhoto(chatId, photoUrl, caption = "") {
+  try {
+    const response = await fetch(`${TELEGRAM_API}/sendPhoto`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        chat_id: chatId,
+        photo: photoUrl,
+        caption: caption
+      }),
+    });
+
+    if (!response.ok) {
+      const errorData = await response.json();
+      console.error("Error sending photo:", errorData);
+    }
+  } catch (err) {
+    console.error("Fetch photo error:", err);
+  }
+}
+
+module.exports = { sendTextMessage, getFileLink, downloadFile, sendPhoto };

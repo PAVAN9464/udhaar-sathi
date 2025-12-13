@@ -2,9 +2,10 @@ const { extractAll, containsHistory } = require("../extractor");
 const { handleLoginStart, handleVerifyOtp, isUserLoggedIn } = require("../services/login.service");
 const { saveEntry, getHistory, deleteEntriesByName, updateDebtBalance, clearDebtTracker, getAllDebts, deleteEntryById, deleteAllHistory } = require("../services/udhaar.service");
 const { upsertUser } = require("../services/user.service");
-const { sendTextMessage, getFileLink, downloadFile } = require("../utils/telegramApi");
+const { sendTextMessage, getFileLink, downloadFile, sendPhoto } = require("../utils/telegramApi");
 const { translateToEnglish } = require("../utils/translate");
-const { transcribeAudio } = require("../utils/groq");
+const { transcribeAudio, generateRoast } = require("../utils/groq");
+const { getRandomEmoji } = require("../utils/emojis");
 const fs = require("fs");
 const path = require("path");
 
@@ -150,6 +151,88 @@ const sendMessage = async (req, res) => {
             });
 
             await sendTextMessage(chatId, msg);
+            return;
+        }
+
+        // ROAST
+        if (/^\/roast$/i.test(text)) {
+            const debts = await getAllDebts(chatId);
+
+            if (!debts || debts.length === 0) {
+                await sendTextMessage(chatId, "🤷‍♂️ You have no debts to roast. You are boringly responsible.");
+                return;
+            }
+
+            // Prepare context
+            let context = "";
+            let totalOwed = 0;
+            let totalOwing = 0;
+
+            debts.forEach(d => {
+                const val = parseFloat(d.amount);
+                if (val > 0) {
+                    context += `User owes ${d.name} ₹${val}.\n`;
+                    totalOwed += val;
+                } else if (val < 0) {
+                    context += `${d.name} owes User ₹${Math.abs(val)}.\n`;
+                    totalOwing += Math.abs(val);
+                }
+            });
+
+            if (totalOwed === 0 && totalOwing === 0) {
+                context = "User has everything settled.";
+            } else {
+                context += `Total User Owes: ₹${totalOwed}. Total Owed to User: ₹${totalOwing}.`;
+            }
+
+            await sendTextMessage(chatId, "🔥 *Cooking up a roast...*");
+            const roast = await generateRoast(context);
+            await sendTextMessage(chatId, `🌶️ *Roasted:* ${roast}`);
+            return;
+        }
+
+        // CHART
+        if (/^\/chart$/i.test(text) || /^\/stats$/i.test(text)) {
+            const debts = await getAllDebts(chatId);
+            if (!debts || debts.length === 0) {
+                await sendTextMessage(chatId, "📊 No data to visualize.");
+                return;
+            }
+
+            // Aggregate data: Only show people who OWE YOU (Positive amounts)
+            // or maybe split into Owed vs Owing
+            const labels = [];
+            const data = [];
+
+            debts.forEach(d => {
+                const val = parseFloat(d.amount);
+                if (val > 0) { // Only showing receivables for the pie chart
+                    labels.push(d.name);
+                    data.push(val);
+                }
+            });
+
+            if (data.length === 0) {
+                await sendTextMessage(chatId, "📊 Everyone is paid up! Nothing to chart.");
+                return;
+            }
+
+            const chartConfig = {
+                type: 'pie',
+                data: {
+                    labels: labels,
+                    datasets: [{
+                        data: data,
+                        backgroundColor: ['#ff6384', '#36a2eb', '#cc65fe', '#ffce56', '#4bc0c0']
+                    }]
+                },
+                options: {
+                    title: { display: true, text: 'Who Owes Me Money?' }
+                }
+            };
+
+            const url = `https://quickchart.io/chart?c=${encodeURIComponent(JSON.stringify(chartConfig))}&width=500&height=300`;
+            await sendPhoto(chatId, url, "📊 *Your Debt Distribution*");
             return;
         }
 
@@ -301,10 +384,12 @@ const sendMessage = async (req, res) => {
         const netBalance = await updateDebtBalance(chatId, name, finalAmount, dueDate, extractedPhone, firstName);
 
         if (isPayment) {
-            await sendTextMessage(chatId, `📉 *Payment Recorded!*\n\nPaid ₹${Math.abs(amount)} for *${name}*.\nNet Balance: ₹${netBalance}`);
+            const emo = getRandomEmoji('PAYMENT');
+            await sendTextMessage(chatId, `${emo} *Payment Recorded!*\n\nPaid ₹${Math.abs(amount)} for *${name}*.\nNet Balance: ₹${netBalance}`);
         } else {
+            const emo = getRandomEmoji('DEBT_ADDED');
             const formattedDate = dueDate ? new Date(dueDate).toDateString() : 'N/A';
-            await sendTextMessage(chatId, `✅ *Debt Added Successfully!*
+            await sendTextMessage(chatId, `${emo} *Debt Added Successfully!*
     
     👤 *Name:* ${name}
     💰 *Amount:* ₹${amount}
