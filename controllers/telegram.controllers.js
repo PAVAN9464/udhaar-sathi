@@ -16,9 +16,17 @@ const sendMessage = async (req, res) => {
         // Always return 200 OK to Telegram to prevent retries
         res.sendStatus(200);
 
+        let chatId;
+        if (update.callback_query) {
+            chatId = update.callback_query.message.chat.id;
+        } else if (update.message && update.message.chat) {
+            chatId = update.message.chat.id;
+        } else {
+            return;
+        }
+
         if (update.callback_query) {
             const callback = update.callback_query;
-            const chatId = callback.message.chat.id;
             const data = callback.data;
             const callbackId = callback.id;
 
@@ -114,7 +122,7 @@ const sendMessage = async (req, res) => {
 
         console.log("received update:", JSON.stringify(update, null, 2));
 
-        const chatId = update.message.chat.id;
+
 
 
         // Extract phone if available (e.g. from contact share or user metadata if accessible)
