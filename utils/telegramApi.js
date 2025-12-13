@@ -1,11 +1,11 @@
 const TOKEN = process.env.TELEGRAM_BOT_TOKEN;
 const TELEGRAM_API = `https://api.telegram.org/bot${TOKEN}`;
 
-async function sendTextMessage(chatId, text) {
+async function sendTextMessage(chatId, text, replyMarkup = null) {
   try {
-    // If text is short, send directly
+    // If text is short, send directly with markup
     if (text.length <= 4000) {
-      await sendMessageChunk(chatId, text);
+      await sendMessageChunk(chatId, text, replyMarkup);
       return;
     }
 
@@ -13,7 +13,9 @@ async function sendTextMessage(chatId, text) {
     const chunkSize = 4000;
     for (let i = 0; i < text.length; i += chunkSize) {
       const chunk = text.substring(i, i + chunkSize);
-      await sendMessageChunk(chatId, chunk);
+      // Only attach markup to the last chunk
+      const isLast = (i + chunkSize >= text.length);
+      await sendMessageChunk(chatId, chunk, isLast ? replyMarkup : null);
     }
 
   } catch (err) {
@@ -21,21 +23,44 @@ async function sendTextMessage(chatId, text) {
   }
 }
 
-async function sendMessageChunk(chatId, text) {
+async function sendMessageChunk(chatId, text, replyMarkup = null) {
+  const body = {
+    chat_id: chatId,
+    text,
+  };
+  if (replyMarkup) {
+    body.reply_markup = replyMarkup;
+  }
+
   const response = await fetch(`${TELEGRAM_API}/sendMessage`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
     },
-    body: JSON.stringify({
-      chat_id: chatId,
-      text,
-    }),
+    body: JSON.stringify(body),
   });
 
   if (!response.ok) {
     const errorData = await response.json();
     console.error("Error sending message:", errorData);
+  }
+}
+
+async function answerCallbackQuery(callbackQueryId, text = null, showAlert = false) {
+  const body = { callback_query_id: callbackQueryId };
+  if (text) {
+    body.text = text;
+    body.show_alert = showAlert;
+  }
+
+  try {
+    await fetch(`${TELEGRAM_API}/answerCallbackQuery`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body)
+    });
+  } catch (err) {
+    console.error("Error answering callback:", err);
   }
 }
 
@@ -92,4 +117,4 @@ async function sendPhoto(chatId, photoUrl, caption = "") {
   }
 }
 
-module.exports = { sendTextMessage, getFileLink, downloadFile, sendPhoto };
+module.exports = { sendTextMessage, getFileLink, downloadFile, sendPhoto, answerCallbackQuery };

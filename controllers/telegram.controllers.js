@@ -2,7 +2,7 @@ const { extractAll, containsHistory } = require("../extractor");
 const { handleLoginStart, handleVerifyOtp, isUserLoggedIn } = require("../services/login.service");
 const { saveEntry, getHistory, deleteEntriesByName, updateDebtBalance, clearDebtTracker, getAllDebts, deleteEntryById, deleteAllHistory } = require("../services/udhaar.service");
 const { upsertUser } = require("../services/user.service");
-const { sendTextMessage, getFileLink, downloadFile, sendPhoto } = require("../utils/telegramApi");
+const { sendTextMessage, getFileLink, downloadFile, sendPhoto, answerCallbackQuery } = require("../utils/telegramApi");
 const { translateToEnglish } = require("../utils/translate");
 const { transcribeAudio, generateRoast } = require("../utils/groq");
 const { getRandomEmoji } = require("../utils/emojis");
@@ -15,6 +15,55 @@ const sendMessage = async (req, res) => {
 
         // Always return 200 OK to Telegram to prevent retries
         res.sendStatus(200);
+
+        if (update.callback_query) {
+            const callback = update.callback_query;
+            const chatId = callback.message.chat.id;
+            const data = callback.data;
+            const callbackId = callback.id;
+
+            // Acknowledge the callback immediately
+            await answerCallbackQuery(callbackId);
+
+            // Handle actions
+            if (data === 'get_stats') {
+                // Trigger /chart logic (call functionality or just suggest)
+                await sendTextMessage(chatId, "📊 *Stats Requested* — generating chart...", null);
+                // Instructions
+                await sendTextMessage(chatId, "Use /chart to see your full visual stats!");
+            }
+            else if (data === 'get_roast') {
+                await sendTextMessage(chatId, "🔥 Prepare to be roasted! (Type /roast to confirm)");
+            }
+            else if (data === 'fun_flip') {
+                const result = Math.random() < 0.5 ? '🪙 *Heads*' : '🦅 *Tails*';
+                // Optionally edit the message, but sending new one is simpler
+                await sendTextMessage(chatId, result);
+            }
+            else if (data === 'help_view') {
+                const helpText = `
+🛠 *Udhaar Sathi Help*
+
+*Basics:*
+• \`Ramesh 500rs\` → Add debt
+• \`Paid Ramesh 200\` → Record payment
+• \`Clear Ramesh\` → Clear debt
+• \`Delete Ramesh\` → Remove last history
+
+*Fun & Visuals:*
+• \`/menu\` → Open Main Menu
+• \`/chart\` → View Debt Pie Chart
+• \`/roast\` → Get focused financial abuse (AI)
+• \`Voice Note\` → Speak to add debts!
+
+*Settings:*
+• Share Contact → To get notifications.
+`;
+                await sendTextMessage(chatId, helpText);
+            }
+
+            return;
+        }
 
         if (!update || !update.message || !update.message.chat) {
             return;
@@ -233,6 +282,31 @@ const sendMessage = async (req, res) => {
 
             const url = `https://quickchart.io/chart?c=${encodeURIComponent(JSON.stringify(chartConfig))}&width=500&height=300`;
             await sendPhoto(chatId, url, "📊 *Your Debt Distribution*");
+            return;
+        }
+
+        // MENU / START / HELP
+        if (/^\/menu$/i.test(text) || /^\/start$/i.test(text) || /^\/help$/i.test(text)) {
+            const menuText = `
+👋 *Welcome to Udhaar Sathi!*
+_Your witty financial companion._
+
+Choose an option below:
+`;
+            const keyboard = {
+                inline_keyboard: [
+                    [
+                        { text: "📊 Visual Stats", callback_data: "get_stats" },
+                        { text: "🔥 Roast Me", callback_data: "get_roast" }
+                    ],
+                    [
+                        { text: "🪙 Coin Flip", callback_data: "fun_flip" },
+                        { text: "❓ Help", callback_data: "help_view" }
+                    ]
+                ]
+            };
+
+            await sendTextMessage(chatId, menuText, keyboard);
             return;
         }
 
