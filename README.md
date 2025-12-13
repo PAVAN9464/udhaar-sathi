@@ -116,8 +116,15 @@ node app.js
 > *Bot transcribes, extracts name/amount, and asks for confirmation.*
 
 **Upload Photo:**
-> 📸 *Upload image of handwritten list*
-> *Bot scans it and lists items to save.*
+
+![5](https://github.com/user-attachments/assets/54e06edc-a1f3-4c32-956a-8782ab2384b8)
+
+![2](https://github.com/user-attachments/assets/bc83ce0b-665a-4080-b46d-f92071f63f37)
+
+![1](https://github.com/user-attachments/assets/7a9336d8-107c-4821-9e28-8853ba4e17c2)
+
+![3](https://github.com/user-attachments/assets/ecbe256b-62b1-4434-b392-3c894093bfd4)
+![4](https://github.com/user-attachments/assets/02ac9633-072d-46a4-89f2-c88cab9408c8)
 
 **Commands:**
 - `/start` -  Welcome menu
@@ -135,3 +142,4 @@ Feel free to open issues or submit pull requests!
 
 ## 📄 License
 ISC
+
