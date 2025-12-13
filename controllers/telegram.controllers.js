@@ -577,15 +577,15 @@ Choose an option below:
 
         // PAYMENT KEYWORD DETECTION: Skip LLM for "paid" or "received"
         const lowerText = text.toLowerCase();
-        const isPayment = lowerText.includes('paid') || lowerText.includes('received');
+        const hasPaymentKeyword = lowerText.includes('paid') || lowerText.includes('received');
 
         let name, amount, intent, extractedPhone, dueDate;
 
-        if (isPayment) {
+        if (hasPaymentKeyword) {
             // REGEX-ONLY EXTRACTION for payments (no LLM call)
             console.log("💸 Payment detected - using regex-only extraction");
             const regexResult = extractAll(text);
-            
+
             name = regexResult.name;
             amount = regexResult.amount;
             intent = 'DEBIT'; // Always DEBIT for payments
