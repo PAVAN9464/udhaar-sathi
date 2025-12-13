@@ -19,11 +19,13 @@ async function upsertUser(chatId, phone, name) {
         const updates = {};
 
         // Normalize phone: remove non-digits, take last 10
-        let normalizedPhone = phone;
+        let normalizedPhone = null;  // Initialize to null
         if (phone) {
-            const digits = phone.replace(/\D/g, '');
+            const phoneStr = String(phone); // Force string
+            const digits = phoneStr.replace(/\D/g, '');
             if (digits.length > 10) normalizedPhone = digits.slice(-10);
             else normalizedPhone = digits;
+            console.log(`DEBUG: upsertUser normalized phone: ${phone} -> ${normalizedPhone}`);
         }
 
         if (normalizedPhone) updates.phone = normalizedPhone;
@@ -38,6 +40,7 @@ async function upsertUser(chatId, phone, name) {
             if (name && existingUser.name !== name) needsUpdate = true;
 
             if (needsUpdate) {
+                console.log("DEBUG: Updating user with:", updates);
                 const { error: updateError } = await supabase
                     .from('users')
                     .update(updates)

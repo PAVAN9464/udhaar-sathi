@@ -29,6 +29,7 @@ const sendMessage = async (req, res) => {
         // Note: update.message.contact only exists if user shared contact explicitly
         // But the prompt says "phone if it exists", so we check for contact object.
         const phone = update.message.contact ? update.message.contact.phone_number : null;
+        console.log("DEBUG: Controller extracted phone:", phone, "Type:", typeof phone);
         const firstName = update.message.from ? update.message.from.first_name : 'Shopkeeper';
 
         // Persist User
